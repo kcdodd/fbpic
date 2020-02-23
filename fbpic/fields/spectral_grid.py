@@ -13,7 +13,9 @@ from .numba_methods import numba_push_eb_standard, numba_push_eb_comoving, \
     numba_correct_currents_crossdeposition_standard, \
     numba_correct_currents_curlfree_comoving, \
     numba_correct_currents_crossdeposition_comoving, \
-    numba_filter_scalar, numba_filter_vector
+    numba_filter_scalar, numba_filter_vector, \
+    numba_correct_divE
+
 # Check if CUDA is available, then import CUDA functions
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
@@ -26,7 +28,8 @@ if cuda_installed:
     cuda_filter_scalar, cuda_filter_vector, \
     cuda_push_eb_standard, cuda_push_eb_comoving, \
     cuda_push_eb_pml_standard, cuda_push_eb_pml_comoving, \
-    cuda_push_rho
+    cuda_push_rho, \
+    cuda_correct_divE
 
 
 class SpectralGrid(object) :
@@ -256,6 +259,7 @@ class SpectralGrid(object) :
                             self.d_kz, self.d_kr,
                             ps.d_j_corr_coef, ps.d_T_eb, ps.d_T_cc,
                             inv_dt, self.Nz, self.Nr)
+
         else :
             # Correct the currents on the CPU
             if ps.V is None:
@@ -303,14 +307,41 @@ class SpectralGrid(object) :
         # Correct div(E) on the CPU
 
         # Calculate the intermediate variable F
-        F = - self.inv_k2 * (
-            - self.rho_prev/epsilon_0 \
-            + 1.j*self.kz*self.Ez + self.kr*( self.Ep - self.Em ) )
+        # F = - self.inv_k2 * (
+        #     - self.rho_prev/epsilon_0 \
+        #     + 1.j*self.kz*self.Ez + self.kr*( self.Ep - self.Em ) )
+        #
+        # # Correct the current accordingly
+        # self.Ep += 0.5*self.kr*F
+        # self.Em += -0.5*self.kr*F
+        # self.Ez += -1.j*self.kz*F
 
-        # Correct the current accordingly
-        self.Ep += 0.5*self.kr*F
-        self.Em += -0.5*self.kr*F
-        self.Ez += -1.j*self.kz*F
+        if self.use_cuda :
+          dim_grid, dim_block = cuda_tpb_bpg_2d( self.Nz, self.Nr, 1, 16 )
+
+          cuda_correct_divE \
+            [dim_grid, dim_block](
+              self.Ez,
+              self.Ep,
+              self.Em,
+              self.inv_k2,
+              self.kz,
+              self.kr,
+              self.rho_prev,
+              self.Nz,
+              self.Nr  )
+
+        else:
+          numba_correct_divE(
+            self.Ez,
+            self.Ep,
+            self.Em,
+            self.inv_k2,
+            self.kz,
+            self.kr,
+            self.rho_prev,
+            self.Nz,
+            self.Nr  )
 
     def push_eb_with(self, ps, use_true_rho=False ) :
         """
@@ -368,6 +399,7 @@ class SpectralGrid(object) :
                     ps.d_C, ps.d_S_w, ps.d_T_eb, ps.d_T_cc, ps.d_T_rho,
                     self.d_kr, self.d_kz, ps.dt, ps.V,
                     use_true_rho, self.Nz, self.Nr )
+
         else :
             # Push the fields on the CPU
             if ps.V is None:
@@ -414,6 +446,7 @@ class SpectralGrid(object) :
             # Push the fields on the GPU
             cuda_push_rho[dim_grid, dim_block](
                 self.rho_prev, self.rho_next, self.Nz, self.Nr )
+
         else :
             # Push the fields on the CPU
             self.rho_prev[:,:] = self.rho_next[:,:]
@@ -453,6 +486,7 @@ class SpectralGrid(object) :
                         self.d_filter_array_z, self.d_filter_array_r )
             else :
                 raise ValueError('Invalid string for fieldtype: %s'%fieldtype)
+
         else :
             # Filter fields on the CPU
             if fieldtype == 'J' :

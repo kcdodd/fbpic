@@ -514,3 +514,23 @@ def cuda_filter_vector( fieldr, fieldt, fieldz, Nz, Nr,
         fieldr[iz, ir] = filter_array_z[iz]*filter_array_r[ir]*fieldr[iz, ir]
         fieldt[iz, ir] = filter_array_z[iz]*filter_array_r[ir]*fieldt[iz, ir]
         fieldz[iz, ir] = filter_array_z[iz]*filter_array_r[ir]*fieldz[iz, ir]
+
+@cuda.jit
+def cuda_correct_divE( Ez, Ep, Em, inv_k2, kz, kr, rho, Nz, Nr ):
+  """
+  Correct the electric field, so that it satisfies the equation
+  div(E) - rho/epsilon_0 = 0
+  """
+  # Cuda 2D grid
+  iz, ir = cuda.grid(2)
+
+  if (iz < Nz) and (ir < Nr) :
+
+    F = - inv_k2[iz, ir] * (
+        - rho[iz, ir] / epsilon_0 \
+        + 1.j*kz[iz, ir]*Ez[iz, ir] + kr[iz, ir]*( Ep[iz, ir] - Em[iz, ir] ) )
+
+    # Correct the current accordingly
+    Ep[iz, ir] += 0.5*kr[iz, ir]*F
+    Em[iz, ir] += -0.5*kr[iz, ir]*F
+    Ez[iz, ir] += -1.j*kz[iz, ir]*F

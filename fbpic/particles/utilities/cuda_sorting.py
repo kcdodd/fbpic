@@ -107,6 +107,7 @@ def sort_particles_per_cell(cell_idx, sorted_idx):
             raise ValueError("Unexpected CPU array")
         d_cell_idx = cupy.asarray(cell_idx)
         d_sorted_idx = cupy.asarray(sorted_idx)
+        
         # `thrust.argsort` will simultaneously:
         # - find the indices `sorted_idx` that sort the initial array cell_idx
         # - sort `cell_idx` in place

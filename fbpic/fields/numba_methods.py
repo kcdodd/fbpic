@@ -395,6 +395,24 @@ def numba_push_eb_pml_comoving( Ep_pml, Em_pml, Bp_pml, Bm_pml,
 
     return
 
+@njit_parallel
+def numba_correct_divE( Ez, Ep, Em, inv_k2, kz, kr, rho, Nz, Nr ):
+    """
+    Correct the electric field, so that it satisfies the equation
+    div(E) - rho/epsilon_0 = 0
+    """
+    # Loop over the 2D grid
+    for iz in prange(Nz):
+        for ir in range(Nr):
+
+            F = - inv_k2[iz, ir] * (
+                - rho[iz, ir] / epsilon_0 \
+                + 1.j*kz[iz, ir]*Ez[iz, ir] + kr[iz, ir]*( Ep[iz, ir] - Em[iz, ir] ) )
+
+            # Correct the current accordingly
+            Ep[iz, ir] += 0.5*kr[iz, ir]*F
+            Em[iz, ir] += -0.5*kr[iz, ir]*F
+            Ez[iz, ir] += -1.j*kz[iz, ir]*F
 
 # -----------------------------------------------------------------------
 # Parallel reduction of the global arrays for threads into a single array

@@ -479,6 +479,7 @@ class Simulation(object):
             # Get the current at t = (n+1/2) dt
             # (Guard cell exchange done either now or after current correction)
             self.deposit('J', exchange=(correct_currents is False))
+            
             # Perform cross-deposition if needed
             if correct_currents and fld.current_correction=='cross-deposition':
                 self.cross_deposit( move_positions )
@@ -510,8 +511,10 @@ class Simulation(object):
 
             # Push the fields E and B on the spectral grid to t = (n+1) dt
             fld.push( use_true_rho, check_exchanges=(self.comm.size > 1) )
+
             if correct_divE:
                 fld.correct_divE()
+
             # Move the grids if needed
             if self.comm.moving_win is not None:
                 # Shift the fields is spectral space and update positions of
