@@ -19,6 +19,8 @@ if cuda_installed:
                 receive_data_from_gpu, mpi_select_gpus
     mpi_select_gpus( MPI )
 
+from .discrete import ArrayOp
+
 # Import the rest of the requirements
 import warnings
 import numba
@@ -308,6 +310,8 @@ class Simulation(object):
 
         # Initialize an empty list of external fields
         self.external_fields = []
+        # Initialize an empty list of external frame fields
+        self._external_frame_fields = []
         # Initialize an empty list of diagnostics and checkpoints
         # (Checkpoints are used for restarting the simulation)
         self.diags = []
@@ -318,6 +322,32 @@ class Simulation(object):
         # Print simulation setup
         print_simulation_setup( self, verbose_level=verbose_level )
 
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    @property
+    def external_frame_fields(self):
+      """External fields specified in the solution reference frame
+
+      Must be instances of ArrayOp with a functtion signature:
+      f(x, y, z, t, Ex, Ey, Ez, Bx, By, Bz)
+
+      positions x,y,z are arrays of the same shape as the field arrays.
+      The current time t is a float,
+      The function should add the field to the existing array value (aka +=),
+      but not change values of x,y,z.
+      """
+      return self._external_frame_fields
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    @external_frame_fields.setter
+    def external_frame_fields(self, fields):
+      if not all( isinstance( f, ArrayOp ) for f in fields ):
+        msg = f"all fields must be instance of ArrayOp: {[type(f) for f in fields]}"
+
+        raise ValueError(msg)
+
+      self._external_frame_fields = fields
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     def step(self, N=1, correct_currents=True,
              correct_divE=False, use_true_rho=False,
              move_positions=True, move_momenta=True, show_progress=True):
@@ -436,11 +466,20 @@ class Simulation(object):
                 species.keep_fields_sorted = True
 
             # Gather the fields from the grid at t = n dt
-            for species in ptcl:
-                species.gather( fld.interp, self.comm )
+            for ps in ptcl:
+              ps.gather( fld.interp, self.comm )
+
+              for ext_field in self.external_frame_fields:
+                  ext_field.exec(
+                    x = ps.x, y = ps.y, z = ps.z, t = self.time,
+                    Ex = ps.Ex, Ey = ps.Ey, Ez = ps.Ez,
+                    Bx = ps.Bx, By = ps.By, Bz = ps.Bz )
+
             # Apply the external fields at t = n dt
             for ext_field in self.external_fields:
                 ext_field.apply_expression( self.ptcl, self.time )
+
+
 
             # Run the diagnostics
             # (after gathering ; allows output of gathered fields on particles)
@@ -479,7 +518,7 @@ class Simulation(object):
             # Get the current at t = (n+1/2) dt
             # (Guard cell exchange done either now or after current correction)
             self.deposit('J', exchange=(correct_currents is False))
-            
+
             # Perform cross-deposition if needed
             if correct_currents and fld.current_correction=='cross-deposition':
                 self.cross_deposit( move_positions )
