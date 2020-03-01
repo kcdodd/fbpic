@@ -7,7 +7,46 @@ It defines the structure and methods associated with the fields.
 """
 import numpy as np
 from scipy.constants import c
+import functools
 
+from fbpic.utils.cuda import cuda_installed
+
+if cuda_installed:
+  from fbpic.utils.cuda import cuda
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+@functools.lru_cache
+def invvol( dz, dr, nr, to_gpu ):
+  """Get cached array for inverse volume of cells
+
+  Parameters
+  ----------
+  dz : float
+    z cell size
+  dr : float
+    r cell size
+  nr : int
+    number of cells in r (length of returned array)
+  to_gpu : bool
+    return gpu array
+
+    False : ndarray
+    True : DeviceNDArray
+
+  Returns
+  -------
+  ndarray or DeviceNDArray
+  """
+  r = ( 0.5 + np.arange(nr) )*dr
+
+  invvol = 1. / ( np.pi*dz*( (r + 0.5*dr)**2 - (r - 0.5*dr)**2 ) )
+
+  if to_gpu:
+    invvol = cuda.to_device( invvol )
+
+  return invvol
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def get_modified_k(k, n_order, dz):
     """
     Calculate the modified k that corresponds to a finite-order stencil
