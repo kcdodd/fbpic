@@ -24,6 +24,7 @@ from .gathering.threading_methods_one_mode import erase_eb_numba, \
 from .deposition.threading_methods import \
         deposit_rho_numba_linear, deposit_rho_numba_cubic, \
         deposit_J_numba_linear, deposit_J_numba_cubic
+from fbpic.fields.numba_methods import sum_reduce_2d_array
 
 # Check if threading is enabled
 from fbpic.utils.threading import nthreads, get_chunk_indices
@@ -822,7 +823,7 @@ class Particles(object) :
                                   'linear' or 'cubic' \
                                    but is `%s`" % self.particle_shape)
 
-    def deposit( self, fld, fieldtype ) :
+    def deposit( self, moment, grid, zmin, dz, rmin, dr ) :
         """
         Deposit the particles charge or current onto the grid
 
@@ -831,21 +832,25 @@ class Particles(object) :
 
         Parameter
         ----------
-        fld : a Field object
-             Contains the list of InterpolationGrid objects with
-             the field values as well as the prefix sum.
+        moment : int
+             Indicates the moment to comute of the particle distribution
 
-        fieldtype : string
-             Indicates which field to deposit
-             Either 'J' or 'rho'
+             0 = density
+             1 = density * v
+        grid : array
+          arrays to deposite computed moment for each m order
+
+          0 : (nm, nz, nr)
+          1 : (nm, 3, nz, nr)
+
+        zmin : float
+        dz : float
+        rmin : float
+        dr : float
         """
-        # Skip deposition for neutral particles (e.g. photons)
-        if self.q == 0:
-            return
-
         # Shortcuts and safe-guards
         grid = fld.interp
-        assert fieldtype in ['rho', 'J']
+        assert moment in [0, 1]
         assert self.particle_shape in ['linear', 'cubic']
 
         # When running on GPU: first sort the arrays of particles
@@ -871,92 +876,92 @@ class Particles(object) :
                 cuda_tpb_bpg_1d(self.prefix_sum.shape[0], TPB=self.deposit_tpb)
 
             # Call the CUDA Kernel for the deposition of rho or J
-            Nm = len( grid )
+            Nm = grid.shape[0]
             # Rho
-            if fieldtype == 'rho':
+            if moment == 0:
                 if self.particle_shape == 'linear':
                     if Nm == 2:
                         deposit_rho_gpu_linear[
                             dim_grid_2d_flat, dim_block_2d_flat](
-                            self.x, self.y, self.z, weight, self.q,
-                            grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                            grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                            grid[0].rho, grid[1].rho,
+                            self.x, self.y, self.z, weight, 1,
+                            1./dz, zmin, grid.shape[1],
+                            1./dr, rmin, grid.shape[2],
+                            grid[0], grid[1],
                             self.cell_idx, self.prefix_sum)
                     else:
                         for m in range(Nm):
                             deposit_rho_gpu_linear_one_mode[
                                 dim_grid_2d_flat, dim_block_2d_flat](
-                                self.x, self.y, self.z, weight, self.q,
-                                grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                                grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                                grid[m].rho, m,
+                                self.x, self.y, self.z, weight, 1,
+                                1./dz, zmin, grid.shape[1],
+                                1./dr, rmin, grid.shape[2],
+                                grid[m], m,
                                 self.cell_idx, self.prefix_sum)
                 elif self.particle_shape == 'cubic':
                     if Nm == 2:
                         deposit_rho_gpu_cubic[
                             dim_grid_2d_flat, dim_block_2d_flat](
-                            self.x, self.y, self.z, weight, self.q,
-                            grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                            grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                            grid[0].rho, grid[1].rho,
+                            self.x, self.y, self.z, weight, 1,
+                            1./dz, zmin, grid.shape[1],
+                            1./dr, rmin, grid.shape[2],
+                            grid[0], grid[1],
                             self.cell_idx, self.prefix_sum)
                     else:
                         for m in range(Nm):
                             deposit_rho_gpu_cubic_one_mode[
                                 dim_grid_2d_flat, dim_block_2d_flat](
-                                self.x, self.y, self.z, weight, self.q,
-                                grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                                grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                                grid[m].rho, m,
+                                self.x, self.y, self.z, weight, 1,
+                                1./dz, zmin, grid.shape[0],
+                                1./dr, rmin, grid.shape[1],
+                                grid[m], m,
                                 self.cell_idx, self.prefix_sum)
             # J
-            elif fieldtype == 'J':
+          elif moment == 1:
                 # Deposit J in each of four directions
                 if self.particle_shape == 'linear':
                     if Nm == 2:
                         deposit_J_gpu_linear[
                             dim_grid_2d_flat, dim_block_2d_flat](
-                            self.x, self.y, self.z, weight, self.q,
+                            self.x, self.y, self.z, weight, 1,
                             self.ux, self.uy, self.uz, self.inv_gamma,
-                            grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                            grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                            grid[0].Jr, grid[1].Jr,
-                            grid[0].Jt, grid[1].Jt,
-                            grid[0].Jz, grid[1].Jz,
+                            1./dz, zmin, grid.shape[2],
+                            1./dr, rmin, grid.shape[3],
+                            grid[0,0], grid[1,0],
+                            grid[0,1], grid[1,1],
+                            grid[0,2], grid[1,2],
                             self.cell_idx, self.prefix_sum)
                     else:
                         for m in range(Nm):
                             deposit_J_gpu_linear_one_mode[
                                 dim_grid_2d_flat, dim_block_2d_flat](
-                                self.x, self.y, self.z, weight, self.q,
+                                self.x, self.y, self.z, weight, 1,
                                 self.ux, self.uy, self.uz, self.inv_gamma,
-                                grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                                grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                                grid[m].Jr, grid[m].Jt, grid[m].Jz, m,
+                                1./dz, zmin, grid.shape[2],
+                                1./dr, rmin, grid.shape[3],
+                                grid[m,0], grid[m,1], grid[m,2], m,
                                 self.cell_idx, self.prefix_sum)
                 elif self.particle_shape == 'cubic':
                     if Nm == 2:
                         deposit_J_gpu_cubic[
                             dim_grid_2d_flat, dim_block_2d_flat](
-                            self.x, self.y, self.z, weight, self.q,
+                            self.x, self.y, self.z, weight, 1,
                             self.ux, self.uy, self.uz, self.inv_gamma,
-                            grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                            grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                            grid[0].Jr, grid[1].Jr,
-                            grid[0].Jt, grid[1].Jt,
-                            grid[0].Jz, grid[1].Jz,
+                            1./dz, zmin, grid.shape[2],
+                            1./dr, rmin, grid.shape[3],
+                            grid[0,0], grid[1,0],
+                            grid[0,1], grid[1,1],
+                            grid[0,2], grid[1,2],
                             self.cell_idx, self.prefix_sum)
                     else:
                         for m in range(Nm):
                             deposit_J_gpu_cubic_one_mode[
                                 dim_grid_2d_flat, dim_block_2d_flat](
-                                self.x, self.y, self.z, weight, self.q,
+                                self.x, self.y, self.z, weight, 1,
                                 self.ux, self.uy, self.uz, self.inv_gamma,
-                                grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                                grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                                grid[m].Jr, grid[m].Jt, grid[m].Jz, m,
-                                self.cell_idx, self.prefix_sum)
+                                1./dz, zmin, grid.shape[2],
+                                1./dr, rmin, grid.shape[3],
+                                grid[m,0], grid[m,1], grid[m,2], m,
+                                self.cell_idx, self.prefix_sum )
 
         # CPU version
         else:
@@ -964,44 +969,53 @@ class Particles(object) :
             # thread) and register the indices that bound each chunks
             ptcl_chunk_indices = get_chunk_indices(self.Ntot, nthreads)
 
+            threaded_grid = np.zeros( (nthreads,) + grid.shape, dtype = grid.dtype )
+
             # Multithreading functions for the deposition of rho or J
             # for Mode 0 and 1 only.
-            if fieldtype == 'rho':
+            if mmoment == 0:
                 # Deposit rho using CPU threading
                 if self.particle_shape == 'linear':
                     deposit_rho_numba_linear(
-                        self.x, self.y, self.z, weight, self.q,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        fld.rho_global, fld.Nm,
+                        self.x, self.y, self.z, weight, 1,
+                        1./dz, zmin, grid.shape[1],
+                        1./dr, rmin, grid.shape[2],
+                        threaded_grid, Nm,
                         nthreads, ptcl_chunk_indices )
                 elif self.particle_shape == 'cubic':
                     deposit_rho_numba_cubic(
-                        self.x, self.y, self.z, weight, self.q,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        fld.rho_global, fld.Nm,
+                        self.x, self.y, self.z, weight, 1,
+                        1./dz, zmin, grid.shape[1],
+                        1./dr, rmin, grid.shape[2],
+                        threaded_grid, Nm,
                         nthreads, ptcl_chunk_indices )
 
-            elif fieldtype == 'J':
+                for m in range(Nm):
+                    sum_reduce_2d_array( threaded_grid, grid[m], m )
+
+            elif moment == 1:
                 # Deposit J using CPU threading
                 if self.particle_shape == 'linear':
                     deposit_J_numba_linear(
-                        self.x, self.y, self.z, weight, self.q,
+                        self.x, self.y, self.z, weight, 1,
                         self.ux, self.uy, self.uz, self.inv_gamma,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        fld.Jr_global, fld.Jt_global, fld.Jz_global, fld.Nm,
+                        1./dz, zmin, grid.shape[2],
+                        1./dr, rmin, grid.shape[3],
+                        threaded_grid, Nm,
                         nthreads, ptcl_chunk_indices )
                 elif self.particle_shape == 'cubic':
                     deposit_J_numba_cubic(
-                        self.x, self.y, self.z, weight, self.q,
+                        self.x, self.y, self.z, weight, 1,
                         self.ux, self.uy, self.uz, self.inv_gamma,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        fld.Jr_global, fld.Jt_global, fld.Jz_global, fld.Nm,
+                        1./dz, zmin, grid.shape[2],
+                        1./dr, rmin, grid.shape[3],
+                        threaded_grid, Nm,
                         nthreads, ptcl_chunk_indices )
 
+                for m in range(Nm):
+                    sum_reduce_2d_array( threaded_grid[:,:,0], grid[m,0], m )
+                    sum_reduce_2d_array( threaded_grid[:,:,1], grid[m,1], m )
+                    sum_reduce_2d_array( threaded_grid[:,:,2], grid[m,2], m )
 
     def sort_particles(self, fld):
         """
