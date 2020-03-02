@@ -25,8 +25,8 @@ def push_x_gpu( x, y, z, ux, uy, uz, inv_gamma, dt,
         The position of the particles
         (is modified by this function)
 
-    ux, uy, uz : 1darray of floats (in meters * second^-1)
-        The velocity of the particles
+    ux, uy, uz : 1darray of floats
+        The velocity of the particles. u is gamma*v/c
 
     inv_gamma : 1darray of floats
         The inverse of the relativistic gamma factor

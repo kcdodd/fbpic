@@ -1,3 +1,3 @@
 
-from .base import (
+from .array_op import (
   ArrayOp )

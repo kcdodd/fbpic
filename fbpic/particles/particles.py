@@ -54,6 +54,9 @@ if cuda_installed:
         get_cell_idx_per_particle, sort_particles_per_cell, \
         prefill_prefix_sum, incl_prefix_sum
 
+from .deposition.moment_nke import (
+  deposit_linear_moment_nke )
+
 class Particles(object) :
     """
     Class that contains the particles data of the simulation
@@ -836,17 +839,20 @@ class Particles(object) :
 
         Parameter
         ----------
-        moment : int
-             Indicates the moment of the particle distribution to compute
+        moment : str
+          Indicates the moment of the particle distribution to compute
+          ( density = 1/cell. multiply by cell/m^3 to get physical density )
 
-             0 = density
-             1 = density * v
+          'n' = density
+          'nv' = density * v
+          'nke' = density * gamma^2 * v^2 * c^2
         grid : array
           arrays to deposite computed moment for each m mode
           ( nm = number of azimuthal modes )
 
-          0 : (nm, nz, nr)
-          1 : (nm, 3, nz, nr)
+          'n' : (nm, nz, nr)
+          'nv' : (nm, 3, nz, nr)
+          'nke' : (nm, nz, nr)
 
         zmin : float
         dz : float
@@ -857,9 +863,6 @@ class Particles(object) :
 
         assert moment in [0, 1]
         assert self.particle_shape in ['linear', 'cubic']
-
-        # get inverse volume for computing density
-        invvol = invvol( dz, dr, grid.shape[-1], to_gpu = self.use_cuda )
 
         Nm = grid.shape[0]
 
@@ -874,15 +877,14 @@ class Particles(object) :
         # For ionizable atoms: set the effective weight to the weight
         # times the ionization level (on GPU, this needs to be done *after*
         # sorting, otherwise `weight` is not equal to the corresponding array)
-        if self.ionizer is not None:
-            weight = self.ionizer.w_times_level
-        else:
-            weight = self.w
+        # if self.ionizer is not None:
+        #     weight = self.ionizer.w_times_level
+        # else:
+        #     weight = self.w
 
         # GPU (CUDA) version
         if self.use_cuda:
 
-            dim_grid, dim_block = cuda_tpb_bpg_2d( grid.shape[-2], grid.shape[-1] )
 
             # Get the threads per block and the blocks per grid
             dim_grid_2d_flat, dim_block_2d_flat = \
@@ -891,7 +893,7 @@ class Particles(object) :
             # Call the CUDA Kernel for the deposition of rho or J
 
             # Rho
-            if moment == 0:
+            if moment == 'n':
                 if self.particle_shape == 'linear':
                     if Nm == 2:
                         deposit_rho_gpu_linear[
@@ -929,11 +931,8 @@ class Particles(object) :
                                 grid[m], m,
                                 self.cell_idx, self.prefix_sum)
 
-                for m in range(Nm):
-                    cuda_divide_scalar_by_volume[dim_grid, dim_block](
-                        grid[m], invvol )
             # J
-            elif moment == 1:
+          elif moment == 'nv':
                 # Deposit J in each of four directions
                 if self.particle_shape == 'linear':
                     if Nm == 2:
@@ -981,9 +980,6 @@ class Particles(object) :
                                 grid[m,0], grid[m,1], grid[m,2], m,
                                 self.cell_idx, self.prefix_sum )
 
-                for m in range(Nm):
-                    cuda_divide_vector_by_volume[dim_grid, dim_block](
-                        grid[m,0], grid[m,1], grid[m,2], invvol )
         # CPU version
         else:
             # Divide particles in chunks (each chunk is handled by a different
@@ -994,7 +990,7 @@ class Particles(object) :
 
             # Multithreading functions for the deposition of rho or J
             # for Mode 0 and 1 only.
-            if mmoment == 0:
+            if mmoment == 'n':
                 # Deposit rho using CPU threading
                 if self.particle_shape == 'linear':
                     deposit_rho_numba_linear(
@@ -1014,7 +1010,7 @@ class Particles(object) :
                 for m in range(Nm):
                     sum_reduce_2d_array( threaded_grid, grid[m], m )
 
-            elif moment == 1:
+            elif moment == 'nv':
                 # Deposit J using CPU threading
                 if self.particle_shape == 'linear':
                     deposit_J_numba_linear(
@@ -1038,7 +1034,18 @@ class Particles(object) :
                     sum_reduce_2d_array( threaded_grid[:,:,1], grid[m,1], m )
                     sum_reduce_2d_array( threaded_grid[:,:,2], grid[m,2], m )
 
-            grid *= invvol
+        if moment == 'nke':
+
+          deposit_moment_nke.exec(
+            grid,
+            coeff,
+            weight,
+            self.cell_idx,
+            self.prefix_sum,
+            self.x, self.y, self.z,
+            self.ux, self.uy, self.uz, self.gamma,
+            dz, zmin, dr, rmin,
+            self.particle_shape )
 
     def sort_particles(self, fld):
         """
