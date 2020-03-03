@@ -1,10 +1,10 @@
 
 import numpy as np
 
-from fbpic.utils.cuda import cuda_installed
+from fbpic.utils.cuda import cuda_installed as numba_cuda_installed
 
-if cuda_installed:
-  from numba import cuda
+if numba_cuda_installed:
+  from numba import cuda as numba_cuda
 
 class ArrayOp:
   """Abstraction of array operation that executes on either cpu or gpu
@@ -14,8 +14,8 @@ class ArrayOp:
   #-----------------------------------------------------------------------------
   def __init__( self ):
 
-    if cuda_installed:
-      self.init_gpu()
+    if numba_cuda_installed:
+      self.init_numba_cuda()
 
     self.init_cpu()
 
@@ -26,8 +26,8 @@ class ArrayOp:
     pass
 
   #-----------------------------------------------------------------------------
-  def init_gpu( self ):
-    """Initialize gpu implementation
+  def init_numba_cuda( self ):
+    """Initialize cuda implementation
     """
     pass
 
@@ -45,14 +45,14 @@ class ArrayOp:
 
     kwargs_in = kwargs
 
-    use_gpu = cuda_installed and (
+    use_numba_cuda = numba_cuda_installed and (
       any(
-        isinstance(arg, cuda.cudadrv.devicearray.DeviceNDArray)
+        isinstance(arg, numba_cuda.cudadrv.devicearray.DeviceNDArray)
         for kw,arg in kwargs.items() )
       or gpu )
 
-    if use_gpu:
-      self.exec_gpu( **kwargs )
+    if use_numba_cuda:
+      self.exec_numba_cuda( **kwargs )
     else:
       self.exec_cpu( **kwargs )
 
@@ -65,7 +65,7 @@ class ArrayOp:
     raise NotImplementedError("exec_cpu not implemented")
 
   #-----------------------------------------------------------------------------
-  def exec_gpu ( self, **kwargs ):
-    """Execute gpu implementation
+  def exec_numba_cuda ( self, **kwargs ):
+    """Execute Numba cuda implementation
     """
-    raise NotImplementedError("exec_gpu not implemented")
+    raise NotImplementedError("exec_numba_cuda not implemented")

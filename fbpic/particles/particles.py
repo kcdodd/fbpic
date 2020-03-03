@@ -844,14 +844,14 @@ class Particles(object) :
           ( density = 1/cell. multiply by cell/m^3 to get physical density )
 
           'n' = density
-          'nv' = density * v
-          'nke' = density * gamma^2 * v^2 * c^2
+          'nu' = density * gamma * v / c
+          'nke' = density * ( gamma - 1 )
         grid : array
           arrays to deposite computed moment for each m mode
           ( nm = number of azimuthal modes )
 
           'n' : (nm, nz, nr)
-          'nv' : (nm, 3, nz, nr)
+          'nu' : (nm, 3, nz, nr)
           'nke' : (nm, nz, nr)
 
         zmin : float
@@ -932,7 +932,7 @@ class Particles(object) :
                                 self.cell_idx, self.prefix_sum)
 
             # J
-          elif moment == 'nv':
+          elif moment == 'nu':
                 # Deposit J in each of four directions
                 if self.particle_shape == 'linear':
                     if Nm == 2:
@@ -1043,7 +1043,7 @@ class Particles(object) :
             self.cell_idx,
             self.prefix_sum,
             self.x, self.y, self.z,
-            self.ux, self.uy, self.uz, self.gamma,
+            self.gamma,
             dz, zmin, dr, rmin,
             self.particle_shape )
 

@@ -13,15 +13,15 @@ if cuda_installed:
       z_shape_linear )
 
 class DepositMomentNKE ( ArrayOp ):
-  """Deposit trace of 2nd distribution moment
+  """Deposit unitless kinetic energy moment
 
-  nke = density * ( gamma * v * c )^2 (aka (pc)^2/m0^2 )
+  nke = density * ( gamma - 1 )
 
   density = 1/cell
 
   multiply by cell/m^3 for physical density
 
-  to get kenetic energy density, multiply by m0^2 (m0 = particle rest mass)
+  to get kenetic energy density, multiply by m0 * c^2 (m0 = particle rest mass)
   """
 
   #-----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ class DepositMomentNKE ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    ux, uy, uz, gamma,
+    gamma,
     dz, zmin, dr, rmin,
     ptcl_shape,
     gpu = False ):
@@ -57,12 +57,8 @@ class DepositMomentNKE ( ArrayOp ):
       particle positions
     y : array
     z : array
-    ux : array
-      particle unitless momenta (gamma * v / c)
-    uy : array
-    uz : array
     gamma : array
-      relativistic gammae
+      relativistic Lorentz factor
     dz : float
       z cell size
     zmin : float
@@ -76,24 +72,25 @@ class DepositMomentNKE ( ArrayOp ):
     """
 
     super().exec(
-      grid,
-      coeff,
-      weight,
-      cell_idx,
-      prefix_sum,
-      x, y, z,
-      ux, uy, uz, gamma,
-      dz, zmin, dr, rmin )
+      grid = grid,
+      coeff = coeff,
+      weight = weight,
+      cell_idx = cell_idx,
+      prefix_sum = prefix_sum,
+      x = x, y = y, z = z,
+      gamma = gamma,
+      dz = dz, zmin = zmin, dr = dr, rmin = rmin,
+      gpu = gpu )
 
   #-----------------------------------------------------------------------------
-  def init_gpu( self ):
+  def init_numba_cuda( self ):
 
     self._deposit_tpb = 16 if cuda_gpu_model == "V100" else 8
 
     @cuda.jit
     def _gpu_linear_one_mode(
       x, y, z, w, coeff,
-      ux, uy, uz, gamma,
+      gamma,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid, m,
@@ -119,9 +116,6 @@ class DepositMomentNKE ( ArrayOp ):
           The weights of the particles
 
       coeff : float
-
-      ux, uy, uz : 1darray of floats
-          The unitless momentum of the particles. u is gamma*v/c
 
       gamma : 1darray of floats
           The inverse of the relativistic gamma factor
@@ -152,7 +146,6 @@ class DepositMomentNKE ( ArrayOp ):
           Represents the cumulative sum of
           the particles per cell
       """
-      c4 = c**4
 
       # Get the 1D CUDA grid
       i = cuda.grid(1)
@@ -177,10 +170,10 @@ class DepositMomentNKE ( ArrayOp ):
         # Declare the local field value for
         # all possible deposition directions,
         # depending on the shape order and per mode for r,t and z.
-        v2_m_00 = 0. + 0.j
-        v2_m_01 = 0. + 0.j
-        v2_m_10 = 0. + 0.j
-        v2_m_11 = 0. + 0.j
+        ke_m_00 = 0. + 0.j
+        ke_m_01 = 0. + 0.j
+        ke_m_10 = 0. + 0.j
+        ke_m_11 = 0. + 0.j
 
         # Loop over the number of particles per cell
         for j in range(frequency_per_cell):
@@ -196,11 +189,7 @@ class DepositMomentNKE ( ArrayOp ):
           xj = x[ptcl_idx]
           yj = y[ptcl_idx]
           zj = z[ptcl_idx]
-          # Velocity
-          uxj = ux[ptcl_idx]
-          uyj = uy[ptcl_idx]
-          uzj = uz[ptcl_idx]
-          # Inverse gamma
+          # gamma
           gammaj = gamma[ptcl_idx]
           # Weights
           wj = coeff * w[ptcl_idx]
@@ -230,12 +219,12 @@ class DepositMomentNKE ( ArrayOp ):
           # Calculate the trace of the second moment
           # ----------------------
 
-          v2_m_scal = wj * c4 * gammaj**2 * ( uxj**2 + uyj**2 + uzj**2 )
+          ke_m_scal = wj * ( gammaj - 1. )
 
-          v2_m_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * v2_m_scal
-          v2_m_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * v2_m_scal
-          v2_m_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * v2_m_scal
-          v2_m_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * v2_m_scal
+          ke_m_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * ke_m_scal
+          ke_m_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * ke_m_scal
+          ke_m_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * ke_m_scal
+          ke_m_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * ke_m_scal
 
         # Calculate longitudinal indices at which to add charge
         iz0 = iz_upper - 1
@@ -254,22 +243,22 @@ class DepositMomentNKE ( ArrayOp ):
 
         # Atomically add the registers to global memory
         if frequency_per_cell > 0:
-          cuda.atomic.add(grid.real, (iz0, ir0), v2_m_00.real)
-          cuda.atomic.add(grid.real, (iz0, ir1), v2_m_10.real)
-          cuda.atomic.add(grid.real, (iz1, ir0), v2_m_01.real)
-          cuda.atomic.add(grid.real, (iz1, ir1), v2_m_11.real)
+          cuda.atomic.add(grid.real, (iz0, ir0), ke_m_00.real)
+          cuda.atomic.add(grid.real, (iz0, ir1), ke_m_10.real)
+          cuda.atomic.add(grid.real, (iz1, ir0), ke_m_01.real)
+          cuda.atomic.add(grid.real, (iz1, ir1), ke_m_11.real)
           if m > 0:
             # For azimuthal modes beyond m=0: add imaginary part
-            cuda.atomic.add(grid.imag, (iz0, ir0), v2_m_00.imag)
-            cuda.atomic.add(grid.imag, (iz0, ir1), v2_m_10.imag)
-            cuda.atomic.add(grid.imag, (iz1, ir0), v2_m_01.imag)
-            cuda.atomic.add(grid.imag, (iz1, ir1), v2_m_11.imag)
+            cuda.atomic.add(grid.imag, (iz0, ir0), ke_m_00.imag)
+            cuda.atomic.add(grid.imag, (iz0, ir1), ke_m_10.imag)
+            cuda.atomic.add(grid.imag, (iz1, ir0), ke_m_01.imag)
+            cuda.atomic.add(grid.imag, (iz1, ir1), ke_m_11.imag)
 
 
     @cuda.jit
     def _gpu_linear(
       x, y, z, w, coeff,
-      ux, uy, uz, gamma,
+      gamma,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid_m0, grid_m1,
@@ -296,9 +285,6 @@ class DepositMomentNKE ( ArrayOp ):
           (For ionizable atoms: weight times the ionization level)
 
       coeff : float
-
-      ux, uy, uz : 1darray of floats
-          The unitless momentum of the particles. u is gamma*v/c
 
       gamma : 1darray of floats
           The inverse of the relativistic gamma factor
@@ -327,8 +313,6 @@ class DepositMomentNKE ( ArrayOp ):
           the particles per cell
       """
 
-      c4 = c**4
-
       # Get the 1D CUDA grid
       i = cuda.grid(1)
       # Deposit the field per cell in parallel (for threads < number of cells)
@@ -353,14 +337,14 @@ class DepositMomentNKE ( ArrayOp ):
         # all possible deposition directions,
         # depending on the shape order and per mode for r,t and z.
 
-        v2_m0_00 = 0.
-        v2_m0_01 = 0.
-        v2_m0_10 = 0.
-        v2_m0_11 = 0.
-        v2_m1_00 = 0. + 0.j
-        v2_m1_01 = 0. + 0.j
-        v2_m1_10 = 0. + 0.j
-        v2_m1_11 = 0. + 0.j
+        ke_m0_00 = 0.
+        ke_m0_01 = 0.
+        ke_m0_10 = 0.
+        ke_m0_11 = 0.
+        ke_m1_00 = 0. + 0.j
+        ke_m1_01 = 0. + 0.j
+        ke_m1_10 = 0. + 0.j
+        ke_m1_11 = 0. + 0.j
 
         # Loop over the number of particles per cell
         for j in range(frequency_per_cell):
@@ -376,11 +360,7 @@ class DepositMomentNKE ( ArrayOp ):
           xj = x[ptcl_idx]
           yj = y[ptcl_idx]
           zj = z[ptcl_idx]
-          # Velocity
-          uxj = ux[ptcl_idx]
-          uyj = uy[ptcl_idx]
-          uzj = uz[ptcl_idx]
-          # Inverse gamma
+          # gamma
           gammaj = gamma[ptcl_idx]
           # Weights
           wj = coeff * w[ptcl_idx]
@@ -407,20 +387,20 @@ class DepositMomentNKE ( ArrayOp ):
 
           # Calculate the currents
           # ----------------------
-          v2 = wj * c4 * gammaj**2 * ( uxj**2 + uyj**2 + uzj**2 )
+          ke = wj * ( gammaj - 1. )
           # Mode 0
-          v2_m0_scal = v2 * exptheta_m0
+          ke_m0_scal = ke * exptheta_m0
           # Mode 1
-          v2_m1_scal = v2 * exptheta_m1
+          ke_m1_scal = ke * exptheta_m1
 
-          v2_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * v2_m0_scal
-          v2_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * v2_m0_scal
-          v2_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * v2_m1_scal
-          v2_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * v2_m1_scal
-          v2_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * v2_m0_scal
-          v2_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * v2_m0_scal
-          v2_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * v2_m1_scal
-          v2_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * v2_m1_scal
+          ke_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * ke_m0_scal
+          ke_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * ke_m0_scal
+          ke_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * ke_m1_scal
+          ke_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * ke_m1_scal
+          ke_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * ke_m0_scal
+          ke_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * ke_m0_scal
+          ke_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * ke_m1_scal
+          ke_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * ke_m1_scal
 
         # Calculate longitudinal indices at which to add charge
         iz0 = iz_upper - 1
@@ -439,23 +419,23 @@ class DepositMomentNKE ( ArrayOp ):
         if frequency_per_cell > 0:
 
           # Mode 0
-          cuda.atomic.add(grid_m0.real, (iz0, ir0), v2_m0_00.real)
-          cuda.atomic.add(grid_m0.real, (iz0, ir1), v2_m0_10.real)
-          cuda.atomic.add(grid_m0.real, (iz1, ir0), v2_m0_01.real)
-          cuda.atomic.add(grid_m0.real, (iz1, ir1), v2_m0_11.real)
+          cuda.atomic.add(grid_m0.real, (iz0, ir0), ke_m0_00.real)
+          cuda.atomic.add(grid_m0.real, (iz0, ir1), ke_m0_10.real)
+          cuda.atomic.add(grid_m0.real, (iz1, ir0), ke_m0_01.real)
+          cuda.atomic.add(grid_m0.real, (iz1, ir1), ke_m0_11.real)
           # Mode 1
-          cuda.atomic.add(grid_m1.real, (iz0, ir0), v2_m1_00.real)
-          cuda.atomic.add(grid_m1.imag, (iz0, ir0), v2_m1_00.imag)
-          cuda.atomic.add(grid_m1.real, (iz0, ir1), v2_m1_10.real)
-          cuda.atomic.add(grid_m1.imag, (iz0, ir1), v2_m1_10.imag)
-          cuda.atomic.add(grid_m1.real, (iz1, ir0), v2_m1_01.real)
-          cuda.atomic.add(grid_m1.imag, (iz1, ir0), v2_m1_01.imag)
-          cuda.atomic.add(grid_m1.real, (iz1, ir1), v2_m1_11.real)
-          cuda.atomic.add(grid_m1.imag, (iz1, ir1), v2_m1_11.imag)
+          cuda.atomic.add(grid_m1.real, (iz0, ir0), ke_m1_00.real)
+          cuda.atomic.add(grid_m1.imag, (iz0, ir0), ke_m1_00.imag)
+          cuda.atomic.add(grid_m1.real, (iz0, ir1), ke_m1_10.real)
+          cuda.atomic.add(grid_m1.imag, (iz0, ir1), ke_m1_10.imag)
+          cuda.atomic.add(grid_m1.real, (iz1, ir0), ke_m1_01.real)
+          cuda.atomic.add(grid_m1.imag, (iz1, ir0), ke_m1_01.imag)
+          cuda.atomic.add(grid_m1.real, (iz1, ir1), ke_m1_11.real)
+          cuda.atomic.add(grid_m1.imag, (iz1, ir1), ke_m1_11.imag)
 
 
-    self._gpu_linear_one_mode = _gpu_linear_one_mode
-    self._gpu_linear = _gpu_linear
+    self._cuda_linear_one_mode = _gpu_linear_one_mode
+    self._cuda_linear = _gpu_linear
 
   # #-----------------------------------------------------------------------------
   # def init_cpu( self ):
@@ -468,14 +448,14 @@ class DepositMomentNKE ( ArrayOp ):
   #   pass
 
   #-----------------------------------------------------------------------------
-  def exec_gpu( self,
+  def exec_numba_cuda( self,
     grid,
     coeff,
     weight,
     cell_idx,
     prefix_sum,
     x, y, z,
-    ux, uy, uz, gamma,
+    gamma,
     dz, zmin, dr, rmin,
     ptcl_shape ):
 
@@ -489,21 +469,21 @@ class DepositMomentNKE ( ArrayOp ):
 
     if ptcl_shape == "linear":
       if Nm == 2:
-        self._gpu_linear[
+        self._cuda_linear[
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
-            ux, uy, uz, gamma,
+            gamma,
             1./dz, zmin, grid.shape[-2],
             1./dr, rmin, grid.shape[-1],
             grid[0], grid[1],
             cell_idx, prefix_sum )
-            
+
       else:
         for m in range(Nm):
-          self._gpu_linear_one_mode[
+          self._cuda_linear_one_mode[
             dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
-              ux, uy, uz, gamma,
+              gamma,
               1./dz, zmin, grid.shape[-2],
               1./dr, rmin, grid.shape[-1],
               grid[m], m,
