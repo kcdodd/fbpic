@@ -840,6 +840,7 @@ class Particles(object) :
                                   'linear' or 'cubic' \
                                    but is `%s`" % self.particle_shape)
 
+    #---------------------------------------------------------------------------
     def deposit( self,
         moment,
         grid,
@@ -932,7 +933,7 @@ class Particles(object) :
             dz, zmin, dr, rmin,
             self.particle_shape )
 
-
+    #---------------------------------------------------------------------------
     def sort_particles(self, fld):
         """
         Sort the particles by performing the following steps:

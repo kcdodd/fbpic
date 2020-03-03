@@ -1,4 +1,11 @@
-
+# Copyright 2016, FBPIC contributors
+# Authors: Remi Lehe, Manuel Kirchen, Kevin Peters
+# License: 3-Clause-BSD-LBNL
+"""
+This file is part of the Fourier-Bessel Particle-In-Cell code (FB-PIC)
+It defines the deposition methods for rho and J for linear and cubic
+order shapes on the CPU with threading.
+"""
 from fbpic.discete import (
   ArrayOp,
   tmp_ndarray )
