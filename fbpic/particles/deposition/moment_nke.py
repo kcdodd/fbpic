@@ -1,17 +1,30 @@
 
-from fbpic.discete import ArrayOp
+from fbpic.discete import (
+  ArrayOp,
+  tmp_ndarray )
 
 import math
 from scipy.constants import c
 import numpy as np
 
+from fbpic.utils.threading import nthreads, get_chunk_indices
+from .threading_methods import (
+  Sz_linear,
+  Sr_linear,
+  Sz_cubic,
+  Sr_cubic )
+
+
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
-    from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
-    from .cuda_methods import (
-      r_shape_linear,
-      z_shape_linear )
+  from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
+  from .cuda_methods import (
+    r_shape_linear,
+    z_shape_linear,
+    z_shape_cubic,
+    r_shape_cubic )
 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class DepositMomentNKE ( ArrayOp ):
   """Deposit unitless kinetic energy moment
 
@@ -21,7 +34,10 @@ class DepositMomentNKE ( ArrayOp ):
 
   multiply by cell/m^3 for physical density
 
-  to get kenetic energy density, multiply by m0 * c^2 (m0 = particle rest mass)
+  to get kenetic energy density, m0 * c^2 * nke (m0 = particle rest mass)
+  to get total energy density, m0 * c^2 * ( nke + n )
+  to get internal thermal energy, m0 * c^2 * ( sqrt( (nke + n)^2 - nu^2 ) - n )
+  see also DepositMomentN, DepositMomentNU
   """
 
   #-----------------------------------------------------------------------------
@@ -85,67 +101,15 @@ class DepositMomentNKE ( ArrayOp ):
   #-----------------------------------------------------------------------------
   def init_numba_cuda( self ):
 
-    self._deposit_tpb = 16 if cuda_gpu_model == "V100" else 8
-
+    @self.attr
     @cuda.jit
-    def _gpu_linear_one_mode(
+    def _cuda_linear_one_mode(
       x, y, z, w, coeff,
       gamma,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid, m,
       cell_idx, prefix_sum):
-      """
-      Deposition of the current J using numba on the GPU.
-      Iterates over the cells and over the particles per cell.
-      Calculates the weighted amount of J that is deposited to the
-      4 cells surounding the particle based on its shape (linear).
-
-      The particles are sorted by their cell index (the lower cell
-      in r and z that they deposit to) and the deposited field
-      is split into 4 variables (one for each possible direction,
-      e.g. upper in z, lower in r) to maintain parallelism while
-      avoiding any race conditions.
-
-      Parameters
-      ----------
-      x, y, z : 1darray of floats (in meters)
-          The position of the particles
-
-      w : 1d array of floats
-          The weights of the particles
-
-      coeff : float
-
-      gamma : 1darray of floats
-          The inverse of the relativistic gamma factor
-
-      grid: 2darrays of complexs
-          output grid of ( gamma * v * c )^2 (aka (pc)^2/m0^2 )
-
-          interpolation grid for mode m.
-          (is modified by this function)
-
-      m: int
-          The index of the azimuthal mode considered
-
-      invdz, invdr : float (in meters^-1)
-          Inverse of the grid step along the considered direction
-
-      zmin, rmin : float (in meters)
-          Position of the edge of the simulation box,
-          along the direction considered
-
-      Nz, Nr : int
-          Number of gridpoints along the considered direction
-
-      cell_idx : 1darray of integers
-          The cell index of the particle
-
-      prefix_sum : 1darray of integers
-          Represents the cumulative sum of
-          the particles per cell
-      """
 
       # Get the 1D CUDA grid
       i = cuda.grid(1)
@@ -254,64 +218,15 @@ class DepositMomentNKE ( ArrayOp ):
             cuda.atomic.add(grid.imag, (iz1, ir0), ke_m_01.imag)
             cuda.atomic.add(grid.imag, (iz1, ir1), ke_m_11.imag)
 
-
+    @self.attr
     @cuda.jit
-    def _gpu_linear(
+    def _cuda_linear(
       x, y, z, w, coeff,
       gamma,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid_m0, grid_m1,
       cell_idx, prefix_sum):
-      """
-      Deposition of the current J using numba on the GPU.
-      Iterates over the cells and over the particles per cell.
-      Calculates the weighted amount of J that is deposited to the
-      4 cells surounding the particle based on its shape (linear).
-
-      The particles are sorted by their cell index (the lower cell
-      in r and z that they deposit to) and the deposited field
-      is split into 4 variables (one for each possible direction,
-      e.g. upper in z, lower in r) to maintain parallelism while
-      avoiding any race conditions.
-
-      Parameters
-      ----------
-      x, y, z : 1darray of floats (in meters)
-          The position of the particles
-
-      w : 1d array of floats
-          The weights of the particles
-          (For ionizable atoms: weight times the ionization level)
-
-      coeff : float
-
-      gamma : 1darray of floats
-          The inverse of the relativistic gamma factor
-
-      grid_m0, grid_m1,: 2darrays of complexs
-          output grid of ( gamma * v * c )^2 (aka (pc)^2/m0^2 )
-
-          interpolation grid for mode 0 and 1.
-          (is modified by this function)
-
-      invdz, invdr : float (in meters^-1)
-          Inverse of the grid step along the considered direction
-
-      zmin, rmin : float (in meters)
-          Position of the edge of the simulation box,
-          along the direction considered
-
-      Nz, Nr : int
-          Number of gridpoints along the considered direction
-
-      cell_idx : 1darray of integers
-          The cell index of the particle
-
-      prefix_sum : 1darray of integers
-          Represents the cumulative sum of
-          the particles per cell
-      """
 
       # Get the 1D CUDA grid
       i = cuda.grid(1)
@@ -434,9 +349,6 @@ class DepositMomentNKE ( ArrayOp ):
           cuda.atomic.add(grid_m1.imag, (iz1, ir1), ke_m1_11.imag)
 
 
-    self._cuda_linear_one_mode = _gpu_linear_one_mode
-    self._cuda_linear = _gpu_linear
-
   # #-----------------------------------------------------------------------------
   # def init_cpu( self ):
   #
@@ -461,14 +373,19 @@ class DepositMomentNKE ( ArrayOp ):
 
     assert ptcl_shape in ['linear', 'cubic']
 
-    Nm = grid.shape[0]
+    # Define optimal number of CUDA threads per block for deposition
+    # and gathering kernels (determined empirically)
+    if ptcl_shape == "cubic":
+      deposit_tpb = 32
+    else:
+      deposit_tpb = 16 if cuda_gpu_model == "V100" else 8
 
     # Get the threads per block and the blocks per grid
     dim_grid_2d_flat, dim_block_2d_flat = \
-      cuda_tpb_bpg_1d(prefix_sum.shape[0], TPB=self._deposit_tpb)
+      cuda_tpb_bpg_1d(prefix_sum.shape[0], TPB=deposit_tpb)
 
     if ptcl_shape == "linear":
-      if Nm == 2:
+      if grid.shape[0] == 2:
         self._cuda_linear[
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
@@ -479,7 +396,7 @@ class DepositMomentNKE ( ArrayOp ):
             cell_idx, prefix_sum )
 
       else:
-        for m in range(Nm):
+        for m in range(grid.shape[0]):
           self._cuda_linear_one_mode[
             dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
@@ -492,4 +409,5 @@ class DepositMomentNKE ( ArrayOp ):
     elif ptcl_shape == "cubic":
       raise NotImplementedError()
 
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 deposit_moment_nke = DepositMomentNKE()

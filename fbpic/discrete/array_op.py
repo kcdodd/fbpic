@@ -32,6 +32,17 @@ class ArrayOp:
     pass
 
   #-----------------------------------------------------------------------------
+  def attr ( self, func ):
+    """Function decorator that adds the function to the instance of ArrayOp
+    """
+    if numba_cuda_installed and isinstance( func, numba_cuda.compiler.AutoJitCUDAKernel ):
+      setattr( self, func.py_func.__name__, func )
+    else:
+      setattr( self, func.__name__, func )
+
+      return func
+
+  #-----------------------------------------------------------------------------
   def exec( self, gpu = False, **kwargs ):
     """Execute array operation
 
