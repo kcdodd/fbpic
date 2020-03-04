@@ -55,7 +55,7 @@ class DepositMomentNKE ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    gamma,
+    gammam1,
     dz, zmin, dr, rmin,
     ptcl_shape,
     gpu = False ):
@@ -80,8 +80,8 @@ class DepositMomentNKE ( ArrayOp ):
       particle positions
     y : array
     z : array
-    gamma : array
-      relativistic Lorentz factor
+    gammam1 : array
+      gamma-1, kinetic part of relativistic Lorentz factor
     dz : float
       z cell size
     zmin : float
@@ -101,7 +101,7 @@ class DepositMomentNKE ( ArrayOp ):
       cell_idx = cell_idx,
       prefix_sum = prefix_sum,
       x = x, y = y, z = z,
-      gamma = gamma,
+      gammam1 = gammam1,
       dz = dz, zmin = zmin, dr = dr, rmin = rmin,
       gpu = gpu )
 
@@ -112,7 +112,7 @@ class DepositMomentNKE ( ArrayOp ):
     @cuda.jit
     def _cuda_linear_one_mode(
       x, y, z, w, coeff,
-      gamma,
+      gammam1,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid, m,
@@ -161,7 +161,7 @@ class DepositMomentNKE ( ArrayOp ):
           yj = y[ptcl_idx]
           zj = z[ptcl_idx]
           # gamma
-          gammaj = gamma[ptcl_idx]
+          gammam1j = gammam1[ptcl_idx]
           # Weights
           wj = coeff * w[ptcl_idx]
 
@@ -190,7 +190,7 @@ class DepositMomentNKE ( ArrayOp ):
           # Calculate the trace of the second moment
           # ----------------------
 
-          ke_m_scal = wj * ( gammaj - 1. )
+          ke_m_scal = wj * gammam1
 
           ke_m_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * ke_m_scal
           ke_m_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * ke_m_scal
@@ -229,7 +229,7 @@ class DepositMomentNKE ( ArrayOp ):
     @cuda.jit
     def _cuda_linear(
       x, y, z, w, coeff,
-      gamma,
+      gammam1,
       invdz, zmin, Nz,
       invdr, rmin, Nr,
       grid_m0, grid_m1,
@@ -283,7 +283,7 @@ class DepositMomentNKE ( ArrayOp ):
           yj = y[ptcl_idx]
           zj = z[ptcl_idx]
           # gamma
-          gammaj = gamma[ptcl_idx]
+          gammam1j = gammam1[ptcl_idx]
           # Weights
           wj = coeff * w[ptcl_idx]
 
@@ -309,7 +309,7 @@ class DepositMomentNKE ( ArrayOp ):
 
           # Calculate the currents
           # ----------------------
-          ke = wj * ( gammaj - 1. )
+          ke = wj * gammam1j
           # Mode 0
           ke_m0_scal = ke * exptheta_m0
           # Mode 1
@@ -374,7 +374,7 @@ class DepositMomentNKE ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    gamma,
+    gammam1,
     dz, zmin, dr, rmin,
     ptcl_shape ):
 
@@ -396,7 +396,7 @@ class DepositMomentNKE ( ArrayOp ):
         self._cuda_linear[
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
-            gamma,
+            gammam1,
             1./dz, zmin, grid.shape[-2],
             1./dr, rmin, grid.shape[-1],
             grid[0], grid[1],
@@ -407,7 +407,7 @@ class DepositMomentNKE ( ArrayOp ):
           self._cuda_linear_one_mode[
             dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
-              gamma,
+              gammam1,
               1./dz, zmin, grid.shape[-2],
               1./dr, rmin, grid.shape[-1],
               grid[m], m,

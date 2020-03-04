@@ -14,7 +14,7 @@ from .inline_functions import push_p_vay
 push_p_vay = numba.njit(push_p_vay)
 
 @njit_parallel
-def push_x_numba( x, y, z, ux, uy, uz, inv_gamma, Ntot, dt,
+def push_x_numba( x, y, z, ux, uy, uz, gammam1, Ntot, dt,
                 push_x, push_y, push_z ):
     """
     Advance the particles' positions over `dt` using the momenta ux, uy, uz,
@@ -25,14 +25,15 @@ def push_x_numba( x, y, z, ux, uy, uz, inv_gamma, Ntot, dt,
 
     # Particle push (in parallel if threading is installed)
     for ip in prange(Ntot) :
-        x[ip] += chdt * inv_gamma[ip] * push_x * ux[ip]
-        y[ip] += chdt * inv_gamma[ip] * push_y * uy[ip]
-        z[ip] += chdt * inv_gamma[ip] * push_z * uz[ip]
+        inv_g = 1. / ( 1. + gammam1[ip] )
+        x[ip] += chdt * inv_g * push_x * ux[ip]
+        y[ip] += chdt * inv_g * push_y * uy[ip]
+        z[ip] += chdt * inv_g * push_z * uz[ip]
 
     return x, y, z
 
 @njit_parallel
-def push_p_numba( ux, uy, uz, inv_gamma,
+def push_p_numba( ux, uy, uz, gammam1,
                 Ex, Ey, Ez, Bx, By, Bz, q, m, Ntot, dt ) :
     """
     Advance the particles' momenta, using numba
@@ -43,14 +44,14 @@ def push_p_numba( ux, uy, uz, inv_gamma,
 
     # Loop over the particles (in parallel if threading is installed)
     for ip in prange(Ntot) :
-        ux[ip], uy[ip], uz[ip], inv_gamma[ip] = push_p_vay(
-            ux[ip], uy[ip], uz[ip], inv_gamma[ip],
+        ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
+            ux[ip], uy[ip], uz[ip], gammam1[ip],
             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst )
 
-    return ux, uy, uz, inv_gamma
+    return ux, uy, uz, gammam1
 
 @njit_parallel
-def push_p_after_plane_numba( z, z_plane, ux, uy, uz, inv_gamma,
+def push_p_after_plane_numba( z, z_plane, ux, uy, uz, gammam1,
                 Ex, Ey, Ez, Bx, By, Bz, q, m, Ntot, dt ) :
     """
     Advance the particles' momenta, using numba.
@@ -64,13 +65,13 @@ def push_p_after_plane_numba( z, z_plane, ux, uy, uz, inv_gamma,
     # Loop over the particles (in parallel if threading is installed)
     for ip in prange(Ntot) :
         if z[ip] > z_plane:
-            ux[ip], uy[ip], uz[ip], inv_gamma[ip] = push_p_vay(
-                ux[ip], uy[ip], uz[ip], inv_gamma[ip],
+            ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
+                ux[ip], uy[ip], uz[ip], gammam1[ip],
                 Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst)
 
 
 @njit_parallel
-def push_p_ioniz_numba( ux, uy, uz, inv_gamma,
+def push_p_ioniz_numba( ux, uy, uz, gammam1,
                 Ex, Ey, Ez, Bx, By, Bz, m, Ntot, dt, ionization_level ) :
     """
     Advance the particles' momenta, using numba
@@ -90,9 +91,9 @@ def push_p_ioniz_numba( ux, uy, uz, inv_gamma,
         econst = prefactor_econst * ionization_level[ip]
         bconst = prefactor_bconst * ionization_level[ip]
         # Perform the push
-        ux[ip], uy[ip], uz[ip], inv_gamma[ip] = push_p_vay(
-            ux[ip], uy[ip], uz[ip], inv_gamma[ip],
+        ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
+            ux[ip], uy[ip], uz[ip], gammam1[ip],
             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip],
             econst, bconst )
 
-    return ux, uy, uz, inv_gamma
+    return ux, uy, uz, gammam1

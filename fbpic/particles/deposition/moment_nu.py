@@ -83,8 +83,6 @@ class DepositMomentNU ( ArrayOp ):
       particle unitless momenta (gamma * v / c)
     uy : array
     uz : array
-    gamma : array
-      relativistic Lorentz factor
     dz : float
       z cell size
     zmin : float
