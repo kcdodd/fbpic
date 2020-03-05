@@ -21,9 +21,6 @@ from .gathering.threading_methods import gather_field_numba_linear, \
         gather_field_numba_cubic
 from .gathering.threading_methods_one_mode import erase_eb_numba, \
     gather_field_numba_linear_one_mode, gather_field_numba_cubic_one_mode
-from .deposition.threading_methods import \
-        deposit_rho_numba_linear, deposit_rho_numba_cubic, \
-        deposit_J_numba_linear, deposit_J_numba_cubic
 
 # use field methods for deposition routines
 from fbpic.fields.numba_methods import sum_reduce_2d_array
@@ -41,11 +38,6 @@ if cuda_installed:
     from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
     from .push.cuda_methods import push_p_gpu, push_p_ioniz_gpu, \
                                 push_p_after_plane_gpu, push_x_gpu
-    from .deposition.cuda_methods import deposit_rho_gpu_linear, \
-        deposit_J_gpu_linear, deposit_rho_gpu_cubic, deposit_J_gpu_cubic
-    from .deposition.cuda_methods_one_mode import \
-        deposit_rho_gpu_linear_one_mode, deposit_J_gpu_linear_one_mode, \
-        deposit_rho_gpu_cubic_one_mode, deposit_J_gpu_cubic_one_mode
     from .gathering.cuda_methods import gather_field_gpu_linear, \
         gather_field_gpu_cubic
     from .gathering.cuda_methods_one_mode import erase_eb_cuda, \
@@ -56,8 +48,7 @@ if cuda_installed:
 
 from .deposition import (
   deposit_moment_n,
-  deposit_moment_nu,
-  deposit_moment_nke )
+  deposit_moment_nv )
 
 class Particles(object) :
     """
@@ -860,15 +851,16 @@ class Particles(object) :
           ( density = 1/cell. multiply by cell/m^3 to get physical density )
 
           'n' = density
-          'nu' = density * gamma * v / c
           'nke' = density * ( gamma - 1 )
+          'nv' = density * v / c
+          'nu' = density * gamma * v / c
+
         grid : array
           arrays to deposite computed moment for each m mode
           ( nm = number of azimuthal modes )
 
-          'n' : (nm, nz, nr)
-          'nu' : (nm, 3, nz, nr)
-          'nke' : (nm, nz, nr)
+          'n', 'nke' : (nm, nz, nr)
+          'nu', 'nv' : (nm, 3, nz, nr)
 
         zmin : float
         dz : float
@@ -877,7 +869,7 @@ class Particles(object) :
         """
         # Shortcuts and safe-guards
 
-        assert moment in [ 'n', 'nu', 'nke' ]
+        assert moment in [ 'n', 'nke', 'nv', 'nu' ]
         assert self.particle_shape in [ 'linear', 'cubic' ]
 
         # When running on GPU: first sort the arrays of particles
@@ -896,7 +888,12 @@ class Particles(object) :
         # else:
         #     weight = self.w
 
-        if moment == 'n':
+        if moment in [ 'n', 'nke' ]:
+
+          if moment == 'n':
+            gammam1 = None
+          else:
+            gammam1 = self.gammam1
 
           deposit_moment_n.exec(
             grid,
@@ -905,31 +902,25 @@ class Particles(object) :
             self.cell_idx,
             self.prefix_sum,
             self.x, self.y, self.z,
+            gammam1,
             dz, zmin, dr, rmin,
             self.particle_shape )
 
-        elif moment == 'nu':
+        elif moment in [ 'nv', 'nu' ]:
 
-          deposit_moment_nu.exec(
+          if moment == 'nu':
+            gammam1 = None
+          else:
+            gammam1 = self.gammam1
+
+          deposit_moment_nv.exec(
             grid,
             coeff,
             weight,
             self.cell_idx,
             self.prefix_sum,
             self.x, self.y, self.z,
-            dz, zmin, dr, rmin,
-            self.particle_shape )
-
-        elif moment == 'nke':
-
-          deposit_moment_nke.exec(
-            grid,
-            coeff,
-            weight,
-            self.cell_idx,
-            self.prefix_sum,
-            self.x, self.y, self.z,
-            self.gamma,
+            gammam1,
             dz, zmin, dr, rmin,
             self.particle_shape )
 
