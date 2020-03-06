@@ -1687,9 +1687,9 @@ class DepositMomentNV ( ArrayOp ):
 
     assert ptcl_shape in ['linear', 'cubic']
 
-    threaded_shape = (nthreads,) + grid.shape
+    threaded_shape = (nthreads, len(grid) ) + grid[0].shape
     # allocate temporary array for parallel writes from each thread
-    threaded_grid = tmp_ndarray( threaded_shape, dtype = grid.dtype )
+    threaded_grid = tmp_ndarray( threaded_shape, dtype = grid[0][0].dtype )
     ndarray_fill( threaded_grid, 0. )
 
     ptcl_chunk_indices = get_chunk_indices(x.shape[0], nthreads)
@@ -1704,9 +1704,9 @@ class DepositMomentNV ( ArrayOp ):
         x, y, z, weight, coeff,
         ux, uy, uz,
         gammam1,
-        1./dz, zmin, grid.shape[-2],
-        1./dr, rmin, grid.shape[-1],
-        threaded_grid, grid.shape[0],
+        1./dz, zmin, grid[0].shape[1],
+        1./dr, rmin, grid[0].shape[2],
+        threaded_grid, len(grid),
         nthreads, ptcl_chunk_indices )
 
     elif ptcl_shape == 'cubic':
@@ -1714,15 +1714,15 @@ class DepositMomentNV ( ArrayOp ):
         x, y, z, weight, coeff,
         ux, uy, uz,
         gammam1,
-        1./dz, zmin, grid.shape[-2],
-        1./dr, rmin, grid.shape[-1],
-        threaded_grid, grid.shape[0],
+        1./dz, zmin, grid[0].shape[1],
+        1./dr, rmin, grid[0].shape[2],
+        threaded_grid, len(grid),
         nthreads, ptcl_chunk_indices )
 
-    for m in range(grid.shape[0]):
-      sum_reduce_2d_array( threaded_grid[:,:,0], grid[m,0], m )
-      sum_reduce_2d_array( threaded_grid[:,:,1], grid[m,1], m )
-      sum_reduce_2d_array( threaded_grid[:,:,2], grid[m,2], m )
+    for m in range(len(grid)):
+      sum_reduce_2d_array( threaded_grid[:,:,0], grid[m][0], m )
+      sum_reduce_2d_array( threaded_grid[:,:,1], grid[m][1], m )
+      sum_reduce_2d_array( threaded_grid[:,:,2], grid[m][2], m )
 
 
   #-----------------------------------------------------------------------------
@@ -1757,53 +1757,53 @@ class DepositMomentNV ( ArrayOp ):
 
     # Deposit J in each of four directions
     if ptcl_shape == 'linear':
-      if grid.shape[0] == 2:
+      if len(grid) == 2:
         self._cuda_linear[
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
             ux, uy, uz,
             gammam1,
-            1./dz, zmin, grid.shape[-2],
-            1./dr, rmin, grid.shape[-1],
-            grid[0,0], grid[1,0],
-            grid[0,1], grid[1,1],
-            grid[0,2], grid[1,2],
+            1./dz, zmin, grid[0].shape[1],
+            1./dr, rmin, grid[0].shape[2],
+            grid[0][0], grid[1][0],
+            grid[0][1], grid[1][1],
+            grid[0][2], grid[1][2],
             cell_idx, prefix_sum )
       else:
-        for m in range(grid.shape[0]):
+        for m in range(len(grid)):
           self._cuda_linear_one_mode[
               dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
               ux, uy, uz,
               gammam1,
-              1./dz, zmin, grid.shape[-2],
-              1./dr, rmin, grid.shape[-1],
-              grid[m,0], grid[m,1], grid[m,2], m,
+              1./dz, zmin, grid[0].shape[1],
+              1./dr, rmin, grid[0].shape[2],
+              grid[m][0], grid[m][1], grid[m][2], m,
               cell_idx, prefix_sum )
 
     elif ptcl_shape == 'cubic':
-      if grid.shape[0] == 2:
+      if len(grid) == 2:
         self._cuda_cubic[
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
             ux, uy, uz,
             gammam1,
-            1./dz, zmin, grid.shape[-2],
-            1./dr, rmin, grid.shape[-1],
-            grid[0,0], grid[1,0],
-            grid[0,1], grid[1,1],
-            grid[0,2], grid[1,2],
+            1./dz, zmin, grid[0].shape[1],
+            1./dr, rmin, grid[0].shape[2],
+            grid[0][0], grid[1][0],
+            grid[0][1], grid[1][1],
+            grid[0][2], grid[1][2],
             cell_idx, prefix_sum )
       else:
-        for m in range(grid.shape[0]):
+        for m in range(len(grid)):
           self._cuda_cubic_one_mode[
             dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
               ux, uy, uz,
               gammam1,
-              1./dz, zmin, grid.shape[-2],
-              1./dr, rmin, grid.shape[-1],
-              grid[m,0], grid[m,1], grid[m,2], m,
+              1./dz, zmin, grid[0].shape[1],
+              1./dr, rmin, grid[0].shape[2],
+              grid[m][0], grid[m][1], grid[m][2], m,
               cell_idx, prefix_sum )
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

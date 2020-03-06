@@ -640,7 +640,15 @@ class Simulation(object):
             fld.erase('rho')
             # Deposit the particle charge
             for species in species_list:
-                species.deposit( fld, 'rho' )
+                # species.deposit( fld, 'rho' )
+                species.deposit(
+                  moment = 'n',
+                  grid = [fld.interp[m].rho for m in range(fld.Nm)],
+                  coeff = 'q',
+                  zmin = fld.zmin,
+                  dz = fld.dz,
+                  rmin = fld.rmin,
+                  dr = fld.dr )
             # Deposit the charge of the virtual particles in the antenna
             for antenna in antennas_list:
                 antenna.deposit( fld, 'rho' )
@@ -657,7 +665,19 @@ class Simulation(object):
             fld.erase('J')
             # Deposit the particle current
             for species in species_list:
-                species.deposit( fld, 'J' )
+                # species.deposit( fld, 'J' )
+                species.deposit(
+                  moment = 'nv',
+                  grid = [ [
+                    fld.interp[m].Jr,
+                    fld.interp[m].Jt,
+                    fld.interp[m].Jz ]
+                    for m in range(fld.Nm) ],
+                  coeff = 'q',
+                  zmin = fld.zmin,
+                  dz = fld.dz,
+                  rmin = fld.rmin,
+                  dr = fld.dr )
             # Deposit the current of the virtual particles in the antenna
             for antenna in antennas_list:
                 antenna.deposit( fld, 'J' )

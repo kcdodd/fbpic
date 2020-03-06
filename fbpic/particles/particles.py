@@ -862,6 +862,12 @@ class Particles(object) :
           'n', 'nke' : (nm, nz, nr)
           'nu', 'nv' : (nm, 3, nz, nr)
 
+        coeff : float, str
+          coefficient to multiply before adding to grid
+
+          if a string is passed as coeff == 'q', the species charge will be used
+          as coeff. If coeff == 'm', the species mass will be used.
+          
         zmin : float
         dz : float
         rmin : float
@@ -871,6 +877,14 @@ class Particles(object) :
 
         assert moment in [ 'n', 'nke', 'nv', 'nu' ]
         assert self.particle_shape in [ 'linear', 'cubic' ]
+
+        if coeff == 'q':
+          coeff = self.q
+        elif coeff == 'm':
+          coeff = self.m
+
+        if coeff == 0.0:
+          return
 
         # When running on GPU: first sort the arrays of particles
         if self.use_cuda:
