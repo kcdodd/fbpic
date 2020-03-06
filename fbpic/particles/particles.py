@@ -148,7 +148,7 @@ class Particles(object) :
             self.use_cuda = False
 
         # Generate evenly-spaced particles
-        Ntot, x, y, z, ux, uy, uz, inv_gamma, w = generate_evenly_spaced(
+        Ntot, x, y, z, ux, uy, uz, gammam1, w = generate_evenly_spaced(
             Npz, zmin, zmax, Npr, rmin, rmax, Nptheta, n, dens_func,
             ux_m, uy_m, uz_m, ux_th, uy_th, uz_th )
 
@@ -166,7 +166,7 @@ class Particles(object) :
         self.ux = ux
         self.uy = uy
         self.uz = uz
-        self.inv_gamma = inv_gamma
+        self.gammam1 = gammam1
         self.w = w
 
         # Initialize the fields array (at the positions of the particles)
@@ -197,7 +197,7 @@ class Particles(object) :
         self.compton_scatterer = None
         # Total number of quantities (necessary in MPI communications)
         self.n_integer_quantities = 0
-        self.n_float_quantities = 8 # x, y, z, ux, uy, uz, inv_gamma, w
+        self.n_float_quantities = 8 # x, y, z, ux, uy, uz, gammam1, w
 
         # Register particle shape
         self.particle_shape = particle_shape
@@ -259,7 +259,7 @@ class Particles(object) :
             self.ux = cuda.to_device(self.ux)
             self.uy = cuda.to_device(self.uy)
             self.uz = cuda.to_device(self.uz)
-            self.inv_gamma = cuda.to_device(self.inv_gamma)
+            self.gammam1 = cuda.to_device(self.gammam1)
             self.w = cuda.to_device(self.w)
 
             # Copy arrays on the GPU for the field
@@ -297,7 +297,7 @@ class Particles(object) :
             self.ux = self.ux.copy_to_host()
             self.uy = self.uy.copy_to_host()
             self.uz = self.uz.copy_to_host()
-            self.inv_gamma = self.inv_gamma.copy_to_host()
+            self.gammam1 = self.gammam1.copy_to_host()
             self.w = self.w.copy_to_host()
 
             # Copy arrays on the CPU for the field
@@ -334,7 +334,7 @@ class Particles(object) :
         assert self.continuous_injection == True
 
         # Have the continuous injector generate the new particles
-        Ntot, x, y, z, ux, uy, uz, inv_gamma, w = \
+        Ntot, x, y, z, ux, uy, uz, gammam1, w = \
                             self.injector.generate_particles( time )
 
         # Convert them to a particle buffer
@@ -346,7 +346,7 @@ class Particles(object) :
         float_buffer[3,:] = ux
         float_buffer[4,:] = uy
         float_buffer[5,:] = uz
-        float_buffer[6,:] = inv_gamma
+        float_buffer[6,:] = gammam1
         float_buffer[7,:] = w
         if self.ionizer is not None:
             # All new particles start at the default ionization level
@@ -513,7 +513,7 @@ class Particles(object) :
         # Iterate over (float) particle attributes
         attr_list = [ (self,'x'), (self,'y'), (self,'z'), \
                         (self,'ux'), (self,'uy'), (self,'uz'), \
-                        (self, 'w'), (self,'inv_gamma') ]
+                        (self, 'w'), (self,'gammam1') ]
         if self.keep_fields_sorted:
             attr_list += [ (self, 'Ex'), (self, 'Ey'), (self, 'Ez'), \
                             (self, 'Bx'), (self, 'By'), (self, 'Bz') ]
@@ -585,7 +585,7 @@ class Particles(object) :
                 # Ionizable species can have a charge that depends on the
                 # macroparticle, and hence require a different function
                 push_p_ioniz_gpu[dim_grid_1d, dim_block_1d](
-                    self.ux, self.uy, self.uz, self.inv_gamma,
+                    self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.m, self.Ntot, self.dt, self.ionizer.ionization_level )
@@ -594,14 +594,14 @@ class Particles(object) :
                 # require a different pusher
                 push_p_after_plane_gpu[dim_grid_1d, dim_block_1d](
                     self.z, z_plane,
-                    self.ux, self.uy, self.uz, self.inv_gamma,
+                    self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
             else:
                 # Standard pusher
                 push_p_gpu[dim_grid_1d, dim_block_1d](
-                    self.ux, self.uy, self.uz, self.inv_gamma,
+                    self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
@@ -611,7 +611,7 @@ class Particles(object) :
             if self.ionizer is not None:
                 # Ionizable species can have a charge that depends on the
                 # macroparticle, and hence require a different function
-                push_p_ioniz_numba(self.ux, self.uy, self.uz, self.inv_gamma,
+                push_p_ioniz_numba(self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez, self.Bx, self.By, self.Bz,
                     self.m, self.Ntot, self.dt, self.ionizer.ionization_level )
             elif z_plane is not None:
@@ -619,13 +619,13 @@ class Particles(object) :
                 # require a different pusher
                 push_p_after_plane_numba(
                     self.z, z_plane,
-                    self.ux, self.uy, self.uz, self.inv_gamma,
+                    self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
             else:
                 # Standard pusher
-                push_p_numba(self.ux, self.uy, self.uz, self.inv_gamma,
+                push_p_numba(self.ux, self.uy, self.uz, self.gammam1,
                     self.Ex, self.Ey, self.Ez, self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
 
@@ -654,14 +654,14 @@ class Particles(object) :
             push_x_gpu[dim_grid_1d, dim_block_1d](
                 self.x, self.y, self.z,
                 self.ux, self.uy, self.uz,
-                self.inv_gamma, dt, x_push, y_push, z_push )
+                self.gammam1, dt, x_push, y_push, z_push )
             # The particle array is unsorted after the push in x
             self.sorted = False
         # CPU version
         else:
             push_x_numba( self.x, self.y, self.z,
                 self.ux, self.uy, self.uz,
-                self.inv_gamma, self.Ntot,
+                self.gammam1, self.Ntot,
                 dt, x_push, y_push, z_push )
 
     def gather( self, grid, comm ) :
@@ -887,11 +887,25 @@ class Particles(object) :
         if coeff == 0.0:
           return
 
+        if moment in [ 'n', 'nke' ]:
+          nz = grid[0].shape[0]
+          nr = grid[0].shape[1]
+        else:
+          nz = grid[0][0].shape[0]
+          nr = grid[0][0].shape[1]
+
         # When running on GPU: first sort the arrays of particles
         if self.use_cuda:
           # Sort the particles
           if not self.sorted:
-            self.sort_particles(fld=fld)
+            self.sort_particles(
+              zmin = zmin,
+              dz = dz,
+              nz = nz,
+              rmin = rmin,
+              dr = dr,
+              nr = nr )
+
             # The particles are now sorted and rearranged
             self.sorted = True
 
@@ -940,7 +954,13 @@ class Particles(object) :
             self.particle_shape )
 
     #---------------------------------------------------------------------------
-    def sort_particles(self, fld):
+    def sort_particles(self,
+        zmin,
+        dz,
+        nz,
+        rmin,
+        dr,
+        nr ):
         """
         Sort the particles by performing the following steps:
         1. Get fied cell index
@@ -950,12 +970,15 @@ class Particles(object) :
 
         Parameter
         ----------
-        fld : a Field object
-             Contains the list of InterpolationGrid objects with
-             the field values as well as the prefix sum.
+        zmin : float
+        dz : float
+        nz : int
+        rmin : float
+        dr : float
+        nr : int
         """
         # Shortcut for interpolation grids
-        grid = fld.interp
+
         # Get the threads per block and the blocks per grid
         dim_grid_1d, dim_block_1d = cuda_tpb_bpg_1d( self.Ntot )
         dim_grid_2d_flat, dim_block_2d_flat = \
@@ -970,8 +993,8 @@ class Particles(object) :
             self.cell_idx,
             self.sorted_idx,
             self.x, self.y, self.z,
-            grid[0].invdz, grid[0].zmin, grid[0].Nz,
-            grid[0].invdr, grid[0].rmin, grid[0].Nr)
+            1/dz, zmin, nz,
+            1/dr, rmin, nr )
         # Sort the cell index array and modify the sorted_idx array
         # accordingly. The value of the sorted_idx array corresponds
         # to the index of the sorted particle in the other particle
