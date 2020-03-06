@@ -100,4 +100,4 @@ class NDArrayFill ( ArrayOp ):
 
     self._cpu( farray, value, nthreads, nt, nf )
 
-ndarray_fill = ArrayFill()
+ndarray_fill = NDArrayFill()

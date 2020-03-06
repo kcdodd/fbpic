@@ -15,7 +15,7 @@ if cuda_installed:
   from fbpic.utils.cuda import cuda
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-@functools.lru_cache
+@functools.lru_cache(8)
 def invvol( dz, dr, nr, to_gpu ):
   """Get cached array for inverse volume of cells
 

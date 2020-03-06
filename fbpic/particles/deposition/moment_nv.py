@@ -6,7 +6,7 @@ This file is part of the Fourier-Bessel Particle-In-Cell code (FB-PIC)
 It defines the deposition methods for rho and J for linear and cubic
 order shapes on the CPU with threading.
 """
-from fbpic.discete import (
+from fbpic.discrete import (
   ArrayOp,
   tmp_ndarray,
   tmp_numba_device_ndarray,
@@ -640,218 +640,218 @@ class DepositMomentNV ( ArrayOp ):
                     cuda.atomic.add(j_z_m.imag, (iz3, ir2), J_z_m_23.imag)
                     cuda.atomic.add(j_z_m.imag, (iz3, ir3), J_z_m_33.imag)
 
-      #.........................................................................
-      @self.attr
-      @cuda.jit
-      def _cuda_linear(
-          x, y, z, w, q,
-          ux, uy, uz,
-          gammam1,
-          invdz, zmin, Nz,
-          invdr, rmin, Nr,
-          j_r_m0, j_r_m1,
-          j_t_m0, j_t_m1,
-          j_z_m0, j_z_m1,
-          cell_idx, prefix_sum):
-          """
-          Deposition of the current J using numba on the GPU.
-          Iterates over the cells and over the particles per cell.
-          Calculates the weighted amount of J that is deposited to the
-          4 cells surounding the particle based on its shape (linear).
+    #.........................................................................
+    @self.attr
+    @cuda.jit
+    def _cuda_linear(
+        x, y, z, w, q,
+        ux, uy, uz,
+        gammam1,
+        invdz, zmin, Nz,
+        invdr, rmin, Nr,
+        j_r_m0, j_r_m1,
+        j_t_m0, j_t_m1,
+        j_z_m0, j_z_m1,
+        cell_idx, prefix_sum):
+        """
+        Deposition of the current J using numba on the GPU.
+        Iterates over the cells and over the particles per cell.
+        Calculates the weighted amount of J that is deposited to the
+        4 cells surounding the particle based on its shape (linear).
 
-          The particles are sorted by their cell index (the lower cell
-          in r and z that they deposit to) and the deposited field
-          is split into 4 variables (one for each possible direction,
-          e.g. upper in z, lower in r) to maintain parallelism while
-          avoiding any race conditions.
+        The particles are sorted by their cell index (the lower cell
+        in r and z that they deposit to) and the deposited field
+        is split into 4 variables (one for each possible direction,
+        e.g. upper in z, lower in r) to maintain parallelism while
+        avoiding any race conditions.
 
-          """
-          # Get the 1D CUDA grid
-          i = cuda.grid(1)
-          # Deposit the field per cell in parallel (for threads < number of cells)
-          if i < prefix_sum.shape[0]:
-              # Retrieve index of upper grid point (in z and r) from prefix-sum index
-              # (See calculation of prefix-sum index in `get_cell_idx_per_particle`)
-              iz_upper = int( i / (Nr+1) )
-              ir_upper = int( i - iz_upper * (Nr+1) )
-              # Calculate the inclusive offset for the current cell
-              # It represents the number of particles contained in all other cells
-              # with an index smaller than i + the total number of particles in the
-              # current cell (inclusive).
-              incl_offset = np.int32(prefix_sum[i])
-              # Calculate the frequency per cell from the offset and the previous
-              # offset (prefix_sum[i-1]).
-              if i > 0:
-                  frequency_per_cell = np.int32(incl_offset - prefix_sum[i-1])
-              if i == 0:
-                  frequency_per_cell = np.int32(incl_offset)
+        """
+        # Get the 1D CUDA grid
+        i = cuda.grid(1)
+        # Deposit the field per cell in parallel (for threads < number of cells)
+        if i < prefix_sum.shape[0]:
+            # Retrieve index of upper grid point (in z and r) from prefix-sum index
+            # (See calculation of prefix-sum index in `get_cell_idx_per_particle`)
+            iz_upper = int( i / (Nr+1) )
+            ir_upper = int( i - iz_upper * (Nr+1) )
+            # Calculate the inclusive offset for the current cell
+            # It represents the number of particles contained in all other cells
+            # with an index smaller than i + the total number of particles in the
+            # current cell (inclusive).
+            incl_offset = np.int32(prefix_sum[i])
+            # Calculate the frequency per cell from the offset and the previous
+            # offset (prefix_sum[i-1]).
+            if i > 0:
+                frequency_per_cell = np.int32(incl_offset - prefix_sum[i-1])
+            if i == 0:
+                frequency_per_cell = np.int32(incl_offset)
 
-              # Declare the local field value for
-              # all possible deposition directions,
-              # depending on the shape order and per mode for r,t and z.
+            # Declare the local field value for
+            # all possible deposition directions,
+            # depending on the shape order and per mode for r,t and z.
 
-              J_r_m0_00 = 0.
-              J_r_m1_00 = 0. + 0.j
-              J_t_m0_00 = 0.
-              J_t_m1_00 = 0. + 0.j
-              J_z_m0_00 = 0.
-              J_z_m1_00 = 0. + 0.j
+            J_r_m0_00 = 0.
+            J_r_m1_00 = 0. + 0.j
+            J_t_m0_00 = 0.
+            J_t_m1_00 = 0. + 0.j
+            J_z_m0_00 = 0.
+            J_z_m1_00 = 0. + 0.j
 
-              J_r_m0_01 = 0.
-              J_r_m1_01 = 0. + 0.j
-              J_t_m0_01 = 0.
-              J_t_m1_01 = 0. + 0.j
-              J_z_m0_01 = 0.
-              J_z_m1_01 = 0. + 0.j
+            J_r_m0_01 = 0.
+            J_r_m1_01 = 0. + 0.j
+            J_t_m0_01 = 0.
+            J_t_m1_01 = 0. + 0.j
+            J_z_m0_01 = 0.
+            J_z_m1_01 = 0. + 0.j
 
-              J_r_m0_10 = 0.
-              J_r_m1_10 = 0. + 0.j
-              J_t_m0_10 = 0.
-              J_t_m1_10 = 0. + 0.j
-              J_z_m0_10 = 0.
-              J_z_m1_10 = 0. + 0.j
+            J_r_m0_10 = 0.
+            J_r_m1_10 = 0. + 0.j
+            J_t_m0_10 = 0.
+            J_t_m1_10 = 0. + 0.j
+            J_z_m0_10 = 0.
+            J_z_m1_10 = 0. + 0.j
 
-              J_r_m0_11 = 0.
-              J_r_m1_11 = 0. + 0.j
-              J_t_m0_11 = 0.
-              J_t_m1_11 = 0. + 0.j
-              J_z_m0_11 = 0.
-              J_z_m1_11 = 0. + 0.j
+            J_r_m0_11 = 0.
+            J_r_m1_11 = 0. + 0.j
+            J_t_m0_11 = 0.
+            J_t_m1_11 = 0. + 0.j
+            J_z_m0_11 = 0.
+            J_z_m1_11 = 0. + 0.j
 
 
-              # Loop over the number of particles per cell
-              for j in range(frequency_per_cell):
-                  # Get the particle index
-                  # ----------------------
-                  # (Since incl_offset is a cumulative sum of particle number,
-                  # and since python index starts at 0, one has to add -1)
-                  ptcl_idx = incl_offset-1-j
+            # Loop over the number of particles per cell
+            for j in range(frequency_per_cell):
+                # Get the particle index
+                # ----------------------
+                # (Since incl_offset is a cumulative sum of particle number,
+                # and since python index starts at 0, one has to add -1)
+                ptcl_idx = incl_offset-1-j
 
-                  # Preliminary arrays for the cylindrical conversion
-                  # --------------------------------------------
-                  # Position
-                  xj = x[ptcl_idx]
-                  yj = y[ptcl_idx]
-                  zj = z[ptcl_idx]
-                  # Velocity
-                  uxj = ux[ptcl_idx]
-                  uyj = uy[ptcl_idx]
-                  uzj = uz[ptcl_idx]
-                  # Weights
-                  wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
+                # Preliminary arrays for the cylindrical conversion
+                # --------------------------------------------
+                # Position
+                xj = x[ptcl_idx]
+                yj = y[ptcl_idx]
+                zj = z[ptcl_idx]
+                # Velocity
+                uxj = ux[ptcl_idx]
+                uyj = uy[ptcl_idx]
+                uzj = uz[ptcl_idx]
+                # Weights
+                wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
 
-                  # Cylindrical conversion
-                  rj = math.sqrt(xj**2 + yj**2)
-                  # Avoid division by 0.
-                  if (rj != 0.):
-                      invr = 1./rj
-                      cos = xj*invr  # Cosine
-                      sin = yj*invr  # Sine
-                  else:
-                      cos = 1.
-                      sin = 0.
-                  exptheta_m0 = 1.
-                  exptheta_m1 = cos + 1.j*sin
+                # Cylindrical conversion
+                rj = math.sqrt(xj**2 + yj**2)
+                # Avoid division by 0.
+                if (rj != 0.):
+                    invr = 1./rj
+                    cos = xj*invr  # Cosine
+                    sin = yj*invr  # Sine
+                else:
+                    cos = 1.
+                    sin = 0.
+                exptheta_m0 = 1.
+                exptheta_m1 = cos + 1.j*sin
 
-                  # Get weights for the deposition
-                  # --------------------------------------------
-                  # Positions of the particles, in the cell unit
-                  r_cell = invdr*(rj - rmin) - 0.5
-                  z_cell = invdz*(zj - zmin) - 0.5
+                # Get weights for the deposition
+                # --------------------------------------------
+                # Positions of the particles, in the cell unit
+                r_cell = invdr*(rj - rmin) - 0.5
+                z_cell = invdz*(zj - zmin) - 0.5
 
-                  # Calculate the currents
-                  # ----------------------
-                  # Mode 0
-                  J_r_m0_scal = wj*(cos*uxj + sin*uyj) * exptheta_m0
-                  J_t_m0_scal = wj*(cos*uyj - sin*uxj) * exptheta_m0
-                  J_z_m0_scal = wj*uzj * exptheta_m0
-                  # Mode 1
-                  J_r_m1_scal = wj*(cos*uxj + sin*uyj) * exptheta_m1
-                  J_t_m1_scal = wj*(cos*uyj - sin*uxj) * exptheta_m1
-                  J_z_m1_scal = wj*uzj * exptheta_m1
+                # Calculate the currents
+                # ----------------------
+                # Mode 0
+                J_r_m0_scal = wj*(cos*uxj + sin*uyj) * exptheta_m0
+                J_t_m0_scal = wj*(cos*uyj - sin*uxj) * exptheta_m0
+                J_z_m0_scal = wj*uzj * exptheta_m0
+                # Mode 1
+                J_r_m1_scal = wj*(cos*uxj + sin*uyj) * exptheta_m1
+                J_t_m1_scal = wj*(cos*uyj - sin*uxj) * exptheta_m1
+                J_z_m1_scal = wj*uzj * exptheta_m1
 
-                  J_r_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_r_m0_scal
-                  J_t_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_t_m0_scal
-                  J_z_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_z_m0_scal
-                  J_r_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_r_m0_scal
-                  J_t_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_t_m0_scal
-                  J_z_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_z_m0_scal
-                  J_r_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_r_m1_scal
-                  J_t_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_t_m1_scal
-                  J_z_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_z_m1_scal
-                  J_r_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_r_m1_scal
-                  J_t_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_t_m1_scal
-                  J_z_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_z_m1_scal
+                J_r_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_r_m0_scal
+                J_t_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_t_m0_scal
+                J_z_m0_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_z_m0_scal
+                J_r_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_r_m0_scal
+                J_t_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_t_m0_scal
+                J_z_m0_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_z_m0_scal
+                J_r_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_r_m1_scal
+                J_t_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_t_m1_scal
+                J_z_m1_00 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 0) * J_z_m1_scal
+                J_r_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_r_m1_scal
+                J_t_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_t_m1_scal
+                J_z_m1_01 += r_shape_linear(r_cell, 0)*z_shape_linear(z_cell, 1) * J_z_m1_scal
 
-                  J_r_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_r_m0_scal
-                  J_t_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_t_m0_scal
-                  J_z_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_z_m0_scal
-                  J_r_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_r_m0_scal
-                  J_t_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_t_m0_scal
-                  J_z_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_z_m0_scal
-                  J_r_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_r_m1_scal
-                  J_t_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_t_m1_scal
-                  J_z_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_z_m1_scal
-                  J_r_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_r_m1_scal
-                  J_t_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_t_m1_scal
-                  J_z_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_z_m1_scal
+                J_r_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_r_m0_scal
+                J_t_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_t_m0_scal
+                J_z_m0_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_z_m0_scal
+                J_r_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_r_m0_scal
+                J_t_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_t_m0_scal
+                J_z_m0_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_z_m0_scal
+                J_r_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_r_m1_scal
+                J_t_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_t_m1_scal
+                J_z_m1_10 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 0) * J_z_m1_scal
+                J_r_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_r_m1_scal
+                J_t_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_t_m1_scal
+                J_z_m1_11 += r_shape_linear(r_cell, 1)*z_shape_linear(z_cell, 1) * J_z_m1_scal
 
-              # Calculate longitudinal indices at which to add charge
-              iz0 = iz_upper - 1
-              iz1 = iz_upper
-              if iz0 < 0:
-                  iz0 += Nz
-              # Calculate radial indices at which to add charge
-              ir0 = ir_upper - 1
-              ir1 = min( ir_upper, Nr-1 )
-              if ir0 < 0:
-                  # Deposition below the axis: fold index into physical region
-                  ir0 = -(1 + ir0)
+            # Calculate longitudinal indices at which to add charge
+            iz0 = iz_upper - 1
+            iz1 = iz_upper
+            if iz0 < 0:
+                iz0 += Nz
+            # Calculate radial indices at which to add charge
+            ir0 = ir_upper - 1
+            ir1 = min( ir_upper, Nr-1 )
+            if ir0 < 0:
+                # Deposition below the axis: fold index into physical region
+                ir0 = -(1 + ir0)
 
-              # Atomically add the registers to global memory
-              if frequency_per_cell > 0:
-                  # jr: Mode 0
-                  cuda.atomic.add(j_r_m0.real, (iz0, ir0), J_r_m0_00.real)
-                  cuda.atomic.add(j_r_m0.real, (iz0, ir1), J_r_m0_10.real)
-                  cuda.atomic.add(j_r_m0.real, (iz1, ir0), J_r_m0_01.real)
-                  cuda.atomic.add(j_r_m0.real, (iz1, ir1), J_r_m0_11.real)
-                  # jr: Mode 1
-                  cuda.atomic.add(j_r_m1.real, (iz0, ir0), J_r_m1_00.real)
-                  cuda.atomic.add(j_r_m1.imag, (iz0, ir0), J_r_m1_00.imag)
-                  cuda.atomic.add(j_r_m1.real, (iz0, ir1), J_r_m1_10.real)
-                  cuda.atomic.add(j_r_m1.imag, (iz0, ir1), J_r_m1_10.imag)
-                  cuda.atomic.add(j_r_m1.real, (iz1, ir0), J_r_m1_01.real)
-                  cuda.atomic.add(j_r_m1.imag, (iz1, ir0), J_r_m1_01.imag)
-                  cuda.atomic.add(j_r_m1.real, (iz1, ir1), J_r_m1_11.real)
-                  cuda.atomic.add(j_r_m1.imag, (iz1, ir1), J_r_m1_11.imag)
-                  # jt: Mode 0
-                  cuda.atomic.add(j_t_m0.real, (iz0, ir0), J_t_m0_00.real)
-                  cuda.atomic.add(j_t_m0.real, (iz0, ir1), J_t_m0_10.real)
-                  cuda.atomic.add(j_t_m0.real, (iz1, ir0), J_t_m0_01.real)
-                  cuda.atomic.add(j_t_m0.real, (iz1, ir1), J_t_m0_11.real)
-                  # jt: Mode 1
-                  cuda.atomic.add(j_t_m1.real, (iz0, ir0), J_t_m1_00.real)
-                  cuda.atomic.add(j_t_m1.imag, (iz0, ir0), J_t_m1_00.imag)
-                  cuda.atomic.add(j_t_m1.real, (iz0, ir1), J_t_m1_10.real)
-                  cuda.atomic.add(j_t_m1.imag, (iz0, ir1), J_t_m1_10.imag)
-                  cuda.atomic.add(j_t_m1.real, (iz1, ir0), J_t_m1_01.real)
-                  cuda.atomic.add(j_t_m1.imag, (iz1, ir0), J_t_m1_01.imag)
-                  cuda.atomic.add(j_t_m1.real, (iz1, ir1), J_t_m1_11.real)
-                  cuda.atomic.add(j_t_m1.imag, (iz1, ir1), J_t_m1_11.imag)
-                  # jz: Mode 0
-                  cuda.atomic.add(j_z_m0.real, (iz0, ir0), J_z_m0_00.real)
-                  cuda.atomic.add(j_z_m0.real, (iz0, ir1), J_z_m0_10.real)
-                  cuda.atomic.add(j_z_m0.real, (iz1, ir0), J_z_m0_01.real)
-                  cuda.atomic.add(j_z_m0.real, (iz1, ir1), J_z_m0_11.real)
-                  # jz: Mode 1
-                  cuda.atomic.add(j_z_m1.real, (iz0, ir0), J_z_m1_00.real)
-                  cuda.atomic.add(j_z_m1.imag, (iz0, ir0), J_z_m1_00.imag)
-                  cuda.atomic.add(j_z_m1.real, (iz0, ir1), J_z_m1_10.real)
-                  cuda.atomic.add(j_z_m1.imag, (iz0, ir1), J_z_m1_10.imag)
-                  cuda.atomic.add(j_z_m1.real, (iz1, ir0), J_z_m1_01.real)
-                  cuda.atomic.add(j_z_m1.imag, (iz1, ir0), J_z_m1_01.imag)
-                  cuda.atomic.add(j_z_m1.real, (iz1, ir1), J_z_m1_11.real)
-                  cuda.atomic.add(j_z_m1.imag, (iz1, ir1), J_z_m1_11.imag)
+            # Atomically add the registers to global memory
+            if frequency_per_cell > 0:
+                # jr: Mode 0
+                cuda.atomic.add(j_r_m0.real, (iz0, ir0), J_r_m0_00.real)
+                cuda.atomic.add(j_r_m0.real, (iz0, ir1), J_r_m0_10.real)
+                cuda.atomic.add(j_r_m0.real, (iz1, ir0), J_r_m0_01.real)
+                cuda.atomic.add(j_r_m0.real, (iz1, ir1), J_r_m0_11.real)
+                # jr: Mode 1
+                cuda.atomic.add(j_r_m1.real, (iz0, ir0), J_r_m1_00.real)
+                cuda.atomic.add(j_r_m1.imag, (iz0, ir0), J_r_m1_00.imag)
+                cuda.atomic.add(j_r_m1.real, (iz0, ir1), J_r_m1_10.real)
+                cuda.atomic.add(j_r_m1.imag, (iz0, ir1), J_r_m1_10.imag)
+                cuda.atomic.add(j_r_m1.real, (iz1, ir0), J_r_m1_01.real)
+                cuda.atomic.add(j_r_m1.imag, (iz1, ir0), J_r_m1_01.imag)
+                cuda.atomic.add(j_r_m1.real, (iz1, ir1), J_r_m1_11.real)
+                cuda.atomic.add(j_r_m1.imag, (iz1, ir1), J_r_m1_11.imag)
+                # jt: Mode 0
+                cuda.atomic.add(j_t_m0.real, (iz0, ir0), J_t_m0_00.real)
+                cuda.atomic.add(j_t_m0.real, (iz0, ir1), J_t_m0_10.real)
+                cuda.atomic.add(j_t_m0.real, (iz1, ir0), J_t_m0_01.real)
+                cuda.atomic.add(j_t_m0.real, (iz1, ir1), J_t_m0_11.real)
+                # jt: Mode 1
+                cuda.atomic.add(j_t_m1.real, (iz0, ir0), J_t_m1_00.real)
+                cuda.atomic.add(j_t_m1.imag, (iz0, ir0), J_t_m1_00.imag)
+                cuda.atomic.add(j_t_m1.real, (iz0, ir1), J_t_m1_10.real)
+                cuda.atomic.add(j_t_m1.imag, (iz0, ir1), J_t_m1_10.imag)
+                cuda.atomic.add(j_t_m1.real, (iz1, ir0), J_t_m1_01.real)
+                cuda.atomic.add(j_t_m1.imag, (iz1, ir0), J_t_m1_01.imag)
+                cuda.atomic.add(j_t_m1.real, (iz1, ir1), J_t_m1_11.real)
+                cuda.atomic.add(j_t_m1.imag, (iz1, ir1), J_t_m1_11.imag)
+                # jz: Mode 0
+                cuda.atomic.add(j_z_m0.real, (iz0, ir0), J_z_m0_00.real)
+                cuda.atomic.add(j_z_m0.real, (iz0, ir1), J_z_m0_10.real)
+                cuda.atomic.add(j_z_m0.real, (iz1, ir0), J_z_m0_01.real)
+                cuda.atomic.add(j_z_m0.real, (iz1, ir1), J_z_m0_11.real)
+                # jz: Mode 1
+                cuda.atomic.add(j_z_m1.real, (iz0, ir0), J_z_m1_00.real)
+                cuda.atomic.add(j_z_m1.imag, (iz0, ir0), J_z_m1_00.imag)
+                cuda.atomic.add(j_z_m1.real, (iz0, ir1), J_z_m1_10.real)
+                cuda.atomic.add(j_z_m1.imag, (iz0, ir1), J_z_m1_10.imag)
+                cuda.atomic.add(j_z_m1.real, (iz1, ir0), J_z_m1_01.real)
+                cuda.atomic.add(j_z_m1.imag, (iz1, ir0), J_z_m1_01.imag)
+                cuda.atomic.add(j_z_m1.real, (iz1, ir1), J_z_m1_11.real)
+                cuda.atomic.add(j_z_m1.imag, (iz1, ir1), J_z_m1_11.imag)
 
     #...........................................................................
     @self.attr

@@ -24,9 +24,7 @@ from .gathering.threading_methods_one_mode import erase_eb_numba, \
 
 # use field methods for deposition routines
 from fbpic.fields.numba_methods import sum_reduce_2d_array
-from fbpic.fields.curda_methods import (
-  cuda_divide_scalar_by_volume,
-  cuda_divide_vector_by_volume )
+
 from fbpic.fields.utility_methods import invvol
 
 # Check if threading is enabled
@@ -35,16 +33,17 @@ from fbpic.utils.threading import nthreads, get_chunk_indices
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
     # Load the CUDA methods
-    from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
-    from .push.cuda_methods import push_p_gpu, push_p_ioniz_gpu, \
-                                push_p_after_plane_gpu, push_x_gpu
-    from .gathering.cuda_methods import gather_field_gpu_linear, \
-        gather_field_gpu_cubic
-    from .gathering.cuda_methods_one_mode import erase_eb_cuda, \
-        gather_field_gpu_linear_one_mode, gather_field_gpu_cubic_one_mode
-    from .utilities.cuda_sorting import write_sorting_buffer, \
-        get_cell_idx_per_particle, sort_particles_per_cell, \
-        prefill_prefix_sum, incl_prefix_sum
+
+  from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
+  from .push.cuda_methods import push_p_gpu, push_p_ioniz_gpu, \
+                              push_p_after_plane_gpu, push_x_gpu
+  from .gathering.cuda_methods import gather_field_gpu_linear, \
+      gather_field_gpu_cubic
+  from .gathering.cuda_methods_one_mode import erase_eb_cuda, \
+      gather_field_gpu_linear_one_mode, gather_field_gpu_cubic_one_mode
+  from .utilities.cuda_sorting import write_sorting_buffer, \
+      get_cell_idx_per_particle, sort_particles_per_cell, \
+      prefill_prefix_sum, incl_prefix_sum
 
 from .deposition import (
   deposit_moment_n,
@@ -862,12 +861,12 @@ class Particles(object) :
           'n', 'nke' : (nm, nz, nr)
           'nu', 'nv' : (nm, 3, nz, nr)
 
-        coeff : float, str
+        coeff : float, str, optional
           coefficient to multiply before adding to grid
 
           if a string is passed as coeff == 'q', the species charge will be used
           as coeff. If coeff == 'm', the species mass will be used.
-          
+
         zmin : float
         dz : float
         rmin : float
@@ -878,7 +877,9 @@ class Particles(object) :
         assert moment in [ 'n', 'nke', 'nv', 'nu' ]
         assert self.particle_shape in [ 'linear', 'cubic' ]
 
-        if coeff == 'q':
+        if coeff is None:
+          coeff = 1.0
+        elif coeff == 'q':
           coeff = self.q
         elif coeff == 'm':
           coeff = self.m

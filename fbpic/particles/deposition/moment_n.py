@@ -6,7 +6,7 @@ This file is part of the Fourier-Bessel Particle-In-Cell code (FB-PIC)
 It defines the deposition methods for rho and J for linear and cubic
 order shapes on the CPU with threading.
 """
-from fbpic.discete import (
+from fbpic.discrete import (
   ArrayOp,
   tmp_ndarray,
   tmp_numba_device_ndarray,
