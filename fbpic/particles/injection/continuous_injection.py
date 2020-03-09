@@ -179,7 +179,7 @@ class ContinuousInjector( object ):
         zmax = self.z_end_plasma
         zmin = self.z_end_plasma - self.nz_inject*self.dz_particles
         # Create the particles
-        Ntot, x, y, z, ux, uy, uz, gammam1, w = generate_evenly_spaced(
+        Ntot, x, y, z, ux, uy, uz, gamma_minus_1, w = generate_evenly_spaced(
                 Npz, zmin, zmax, self.Npr, self.rmin, self.rmax,
                 self.Nptheta, self.n, dens_func,
                 self.ux_m, self.uy_m, self.uz_m,
@@ -188,7 +188,7 @@ class ContinuousInjector( object ):
         # Reset the number of particle cells to be created
         self.nz_inject = 0
 
-        return( Ntot, x, y, z, ux, uy, uz, gammam1, w )
+        return( Ntot, x, y, z, ux, uy, uz, gamma_minus_1, w )
 
 
 # Utility functions
@@ -252,9 +252,9 @@ def generate_evenly_spaced( Npz, zmin, zmax, Npr, rmin, rmax,
         uz = uz_m * np.ones(Ntot) + uz_th * np.random.normal(size=Ntot)
         ux = ux_m * np.ones(Ntot) + ux_th * np.random.normal(size=Ntot)
         uy = uy_m * np.ones(Ntot) + uy_th * np.random.normal(size=Ntot)
-        gammam1 = np.sqrt( 1 + ux**2 + uy**2 + uz**2 ) - 1
+        gamma_minus_1 = np.sqrt( 1 + ux**2 + uy**2 + uz**2 ) - 1
         # Return the particle arrays
-        return( Ntot, x, y, z, ux, uy, uz, gammam1, w )
+        return( Ntot, x, y, z, ux, uy, uz, gamma_minus_1, w )
     else:
         # No particles are initialized ; the arrays are still created
         Ntot = 0

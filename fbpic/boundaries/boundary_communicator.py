@@ -1164,7 +1164,7 @@ class BoundaryCommunicator(object):
         Ntot = sum(n_rank)
         # Loop over particle attributes that need to be gathered
         for particle_attr in ['x', 'y', 'z', 'ux', 'uy',
-                              'uz', 'inv_gamma', 'w']:
+                              'uz', 'gamma_minus_1', 'w']:
             # Get array of particle attribute
             array = getattr(ptcl, particle_attr)
             # Gather array on process root

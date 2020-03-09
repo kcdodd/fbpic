@@ -66,7 +66,7 @@ class DepositMomentNV ( ArrayOp ):
     prefix_sum,
     x, y, z,
     ux, uy, uz,
-    gammam1,
+    gamma_minus_1,
     dz, zmin, dr, rmin,
     ptcl_shape,
     gpu = False ):
@@ -95,7 +95,7 @@ class DepositMomentNV ( ArrayOp ):
       particle unitless momenta (gamma * v / c)
     uy : array
     uz : array
-    gammam1 : array, optional
+    gamma_minus_1 : array, optional
       gamma - 1
 
       If not specified, computes density * gamma * v / c, instead of density * v / c
@@ -119,7 +119,7 @@ class DepositMomentNV ( ArrayOp ):
       prefix_sum = prefix_sum,
       x = x, y = y, z = z,
       ux = ux, uy = uy, uz = uz,
-      gammam1 = gammam1,
+      gamma_minus_1 = gamma_minus_1,
       dz = dz, zmin = zmin,
       dr = dr, rmin = rmin,
       gpu = gpu )
@@ -131,7 +131,7 @@ class DepositMomentNV ( ArrayOp ):
     @cuda.jit
     def _cuda_linear_one_mode(x, y, z, w, q,
                              ux, uy, uz,
-                             gammam1,
+                             gamma_minus_1,
                              invdz, zmin, Nz,
                              invdr, rmin, Nr,
                              j_r_m, j_t_m, j_z_m, m,
@@ -203,7 +203,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[ptcl_idx]
                 uzj = uz[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
+                wj = q * w[ptcl_idx] / ( 1. + gamma_minus_1[ptcl_idx] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -298,7 +298,7 @@ class DepositMomentNV ( ArrayOp ):
     def _cuda_cubic_one_mode(
         x, y, z, w, q,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         j_r_m, j_t_m, j_z_m, m,
@@ -421,7 +421,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[ptcl_idx]
                 uzj = uz[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
+                wj = q * w[ptcl_idx] / ( 1. + gamma_minus_1[ptcl_idx] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -646,7 +646,7 @@ class DepositMomentNV ( ArrayOp ):
     def _cuda_linear(
         x, y, z, w, q,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         j_r_m0, j_r_m1,
@@ -738,7 +738,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[ptcl_idx]
                 uzj = uz[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
+                wj = q * w[ptcl_idx] / ( 1. + gamma_minus_1[ptcl_idx] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -859,7 +859,7 @@ class DepositMomentNV ( ArrayOp ):
     def _cuda_cubic(
         x, y, z, w, q,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         j_r_m0, j_r_m1,
@@ -1032,7 +1032,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[ptcl_idx]
                 uzj = uz[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] / ( 1. + gammam1[ptcl_idx] )
+                wj = q * w[ptcl_idx] / ( 1. + gamma_minus_1[ptcl_idx] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -1356,67 +1356,12 @@ class DepositMomentNV ( ArrayOp ):
     def _cpu_linear(
         x, y, z, w, q,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         grid, Nm,
         nthreads, ptcl_chunk_indices):
-        """
-        Deposition of the current density J using numba prange on the CPU.
-        Iterates over the threads in parallel, while each thread iterates
-        over a batch of particles. Intermediate results for each threads are
-        stored in copies of the global grid. At the end of the parallel loop,
-        the thread-local field arrays are combined (summed) to the global array.
-        (This final reduction is *not* done in this function)
 
-        Calculates the weighted amount of J that is deposited to the
-        4 cells surounding the particle based on its shape (linear).
-
-        Parameters
-        ----------
-        x, y, z : 1darray of floats (in meters)
-            The position of the particles
-
-        w : 1d array of floats
-            The weights of the particles
-            (For ionizable atoms: weight times the ionization level)
-
-        q : float
-            Charge of the species
-            (For ionizable atoms: this is always the elementary charge e)
-
-        ux, uy, uz : 1darray of floats (in meters * second^-1)
-            The velocity of the particles
-
-        inv_gamma : 1darray of floats
-            The inverse of the relativistic gamma factor
-
-        j_x_global : 4darrays of complexs
-            Global helper arrays of shape (nthreads, Nm, 2+Nz+2, 2+Nr+2) where the
-            additional 2's in z and r correspond to deposition guard cells.
-            This array stores the thread local charge density on the interpolation
-            grid for each mode. (is modified by this function)
-
-        Nm : int
-            The number of azimuthal modes
-
-        invdz, invdr : float (in meters^-1)
-            Inverse of the grid step along the considered direction
-
-        zmin, rmin : float (in meters)
-            Position of the edge of the simulation box,
-            along the direction considered
-
-        Nz, Nr : int
-            Number of gridpoints along the considered direction
-
-        nthreads : int
-            Number of CPU threads used with numba prange
-
-        ptcl_chunk_indices : array of int, of size nthreads+1
-            The indices (of the particle array) between which each thread
-            should loop. (i.e. divisions of particle array between threads)
-        """
         # Deposit the field per cell in parallel (for threads < number of cells)
         for i_thread in prange( nthreads ):
 
@@ -1438,7 +1383,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[i_ptcl]
                 uzj = uz[i_ptcl]
                 # Weights
-                wj = q * w[i_ptcl] / ( 1. + gammam1[i_ptcl] )
+                wj = q * w[i_ptcl] / ( 1. + gamma_minus_1[i_ptcl] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -1494,68 +1439,12 @@ class DepositMomentNV ( ArrayOp ):
     def _cpu_cubic(
         x, y, z, w, q,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         grid, Nm,
         nthreads, ptcl_chunk_indices):
-        """
-        Deposition of the current density J using numba prange on the CPU.
-        Iterates over the threads in parallel, while each thread iterates
-        over a batch of particles. Intermediate results for each threads are
-        stored in copies of the global grid. At the end of the parallel loop,
-        the thread-local field arrays are combined (summed) to the global array.
-        (This final reduction is *not* done in this function)
-
-        Calculates the weighted amount of J that is deposited to the
-        16 cells surounding the particle based on its shape (cubic).
-
-        Parameters
-        ----------
-        x, y, z : 1darray of floats (in meters)
-            The position of the particles
-
-        w : 1d array of floats
-            The weights of the particles
-            (For ionizable atoms: weight times the ionization level)
-
-        q : float
-            Charge of the species
-            (For ionizable atoms: this is always the elementary charge e)
-
-        ux, uy, uz : 1darray of floats (in meters * second^-1)
-            The velocity of the particles
-
-        inv_gamma : 1darray of floats
-            The inverse of the relativistic gamma factor
-
-        j_x_global : 4darrays of complexs
-            Global helper arrays of shape (nthreads, Nm, 2+Nz+2, 2+Nr+2) where the
-            additional 2's in z and r correspond to deposition guard cells.
-            This array stores the thread local current component in each
-            direction (r, t, z) on the interpolation grid for each mode.
-            (is modified by this function)
-
-        Nm : int
-            The number of azimuthal modes
-
-        invdz, invdr : float (in meters^-1)
-            Inverse of the grid step along the considered direction
-
-        zmin, rmin : float (in meters)
-            Position of the edge of the simulation box,
-            along the direction considered
-
-        Nz, Nr : int
-            Number of gridpoints along the considered direction
-
-        nthreads : int
-            Number of CPU threads used with numba prange
-
-        ptcl_chunk_indices : array of int, of size nthreads+1
-            The indices (of the particle array) between which each thread
-            should loop. (i.e. divisions of particle array between threads)
-        """
+      
         # Deposit the field per cell in parallel (for threads < number of cells)
         for i_thread in prange( nthreads ):
 
@@ -1577,7 +1466,7 @@ class DepositMomentNV ( ArrayOp ):
                 uyj = uy[i_ptcl]
                 uzj = uz[i_ptcl]
                 # Weights
-                wj = q * w[i_ptcl] / ( 1. + gammam1[i_ptcl] )
+                wj = q * w[i_ptcl] / ( 1. + gamma_minus_1[i_ptcl] )
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -1680,7 +1569,7 @@ class DepositMomentNV ( ArrayOp ):
     prefix_sum,
     x, y, z,
     ux, uy, uz,
-    gammam1,
+    gamma_minus_1,
     dz, zmin,
     dr, rmin,
     ptcl_shape, ):
@@ -1694,16 +1583,16 @@ class DepositMomentNV ( ArrayOp ):
 
     ptcl_chunk_indices = get_chunk_indices(x.shape[0], nthreads)
 
-    if gammam1 is None:
-      gammam1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gammam1, 0.0 )
+    if gamma_minus_1 is None:
+      gamma_minus_1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
+      ndarray_fill( gamma_minus_1, 0.0 )
 
     # Deposit J using CPU threading
     if ptcl_shape == 'linear':
       self._cpu_linear(
         x, y, z, weight, coeff,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         1./dz, zmin, grid[0].shape[1],
         1./dr, rmin, grid[0].shape[2],
         threaded_grid, len(grid),
@@ -1713,7 +1602,7 @@ class DepositMomentNV ( ArrayOp ):
       self._cpu_cubic(
         x, y, z, weight, coeff,
         ux, uy, uz,
-        gammam1,
+        gamma_minus_1,
         1./dz, zmin, grid[0].shape[1],
         1./dr, rmin, grid[0].shape[2],
         threaded_grid, len(grid),
@@ -1734,7 +1623,7 @@ class DepositMomentNV ( ArrayOp ):
     prefix_sum,
     x, y, z,
     ux, uy, uz,
-    gammam1,
+    gamma_minus_1,
     dz, zmin,
     dr, rmin,
     ptcl_shape ):
@@ -1751,9 +1640,9 @@ class DepositMomentNV ( ArrayOp ):
     dim_grid_2d_flat, dim_block_2d_flat = \
         cuda_tpb_bpg_1d(prefix_sum.shape[0], TPB=deposit_tpb)
 
-    if gammam1 is None:
-      gammam1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gammam1, 0.0 )
+    if gamma_minus_1 is None:
+      gamma_minus_1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
+      ndarray_fill( gamma_minus_1, 0.0 )
 
     # Deposit J in each of four directions
     if ptcl_shape == 'linear':
@@ -1762,7 +1651,7 @@ class DepositMomentNV ( ArrayOp ):
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
             ux, uy, uz,
-            gammam1,
+            gamma_minus_1,
             1./dz, zmin, grid[0].shape[1],
             1./dr, rmin, grid[0].shape[2],
             grid[0][0], grid[1][0],
@@ -1775,7 +1664,7 @@ class DepositMomentNV ( ArrayOp ):
               dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
               ux, uy, uz,
-              gammam1,
+              gamma_minus_1,
               1./dz, zmin, grid[0].shape[1],
               1./dr, rmin, grid[0].shape[2],
               grid[m][0], grid[m][1], grid[m][2], m,
@@ -1787,7 +1676,7 @@ class DepositMomentNV ( ArrayOp ):
           dim_grid_2d_flat, dim_block_2d_flat](
             x, y, z, weight, coeff,
             ux, uy, uz,
-            gammam1,
+            gamma_minus_1,
             1./dz, zmin, grid[0].shape[1],
             1./dr, rmin, grid[0].shape[2],
             grid[0][0], grid[1][0],
@@ -1800,7 +1689,7 @@ class DepositMomentNV ( ArrayOp ):
             dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff,
               ux, uy, uz,
-              gammam1,
+              gamma_minus_1,
               1./dz, zmin, grid[0].shape[1],
               1./dr, rmin, grid[0].shape[2],
               grid[m][0], grid[m][1], grid[m][2], m,

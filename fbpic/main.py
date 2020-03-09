@@ -644,7 +644,7 @@ class Simulation(object):
                 species.deposit(
                   moment = 'n',
                   grid = [fld.interp[m].rho for m in range(fld.Nm)],
-                  coeff = 'q',
+                  coeff = species.q,
                   zmin = fld.interp[0].zmin,
                   dz = fld.interp[0].dz,
                   rmin = fld.interp[0].rmin,
@@ -673,7 +673,7 @@ class Simulation(object):
                     fld.interp[m].Jt,
                     fld.interp[m].Jz ]
                     for m in range(fld.Nm) ],
-                  coeff = 'q',
+                  coeff = species.q,
                   zmin = fld.interp[0].zmin,
                   dz = fld.interp[0].dz,
                   rmin = fld.interp[0].rmin,

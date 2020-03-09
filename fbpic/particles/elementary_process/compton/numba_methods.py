@@ -53,7 +53,7 @@ def get_photon_density_gaussian_numba( photon_n, elec_Ntot,
 @njit_parallel
 def determine_scatterings_numba( N_batch, batch_size, elec_Ntot,
     nscatter_per_elec, nscatter_per_batch, dt,
-    elec_ux, elec_uy, elec_uz, elec_inv_gamma, ratio_w_electron_photon,
+    elec_ux, elec_uy, elec_uz, elec_gamma_minus_1, ratio_w_electron_photon,
     photon_n, photon_p, photon_beta_x, photon_beta_y, photon_beta_z ):
     """
     For each electron macroparticle, decide how many photon macroparticles
@@ -85,7 +85,7 @@ def determine_scatterings_numba( N_batch, batch_size, elec_Ntot,
 
             # For each electron, calculate the probability of scattering
             p = get_scattering_probability( dt, elec_ux[ip], elec_uy[ip],
-                elec_uz[ip], elec_inv_gamma[ip], photon_n[ip],
+                elec_uz[ip], elec_gamma_minus_1[ip], photon_n[ip],
                 photon_p, photon_beta_x, photon_beta_y, photon_beta_z )
 
             # Determine the number of photons produced by this electron
@@ -108,9 +108,9 @@ def scatter_photons_electrons_numba(
     N_batch, batch_size, photon_old_Ntot, elec_Ntot,
     cumul_nscatter_per_batch, nscatter_per_elec,
     photon_p, photon_px, photon_py, photon_pz,
-    photon_x, photon_y, photon_z, photon_inv_gamma,
+    photon_x, photon_y, photon_z, photon_gamma_minus_1,
     photon_ux, photon_uy, photon_uz, photon_w,
-    elec_x, elec_y, elec_z, elec_inv_gamma,
+    elec_x, elec_y, elec_z, elec_gamma_minus_1,
     elec_ux, elec_uy, elec_uz, elec_w, inv_ratio_w_elec_photon ):
     """
     Given the number of photons that are emitted by each electron
@@ -138,10 +138,10 @@ def scatter_photons_electrons_numba(
             if nscatter_per_elec[i_elec] > 0:
 
                 # Prepare Lorentz transformation to the electron rest frame
-                elec_gamma = 1./elec_inv_gamma[i_elec]
+                elec_gamma = elec_gamma_minus_1[i_elec] + 1
                 elec_u = math.sqrt(
                   elec_ux[i_elec]**2 + elec_uy[i_elec]**2 + elec_uz[i_elec]**2)
-                elec_beta = elec_u * elec_inv_gamma[i_elec]
+                elec_beta = elec_u / elec_gamma
                 if elec_u != 0:
                     elec_inv_u = 1./elec_u
                     elec_nx = elec_inv_u * elec_ux[i_elec]
@@ -242,7 +242,7 @@ def scatter_photons_electrons_numba(
                 # The photon's inv_gamma corresponds to 1./p (consistent
                 # with the code for the particle pusher and for the
                 # openPMD back-transformed diagnostics)
-                photon_inv_gamma[i_photon] = 1./new_photon_p
+                photon_gamma_minus_1[i_photon] = new_photon_p - 1
 
                 # Update the photon index
                 i_photon += 1

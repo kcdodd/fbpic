@@ -93,10 +93,10 @@ def copy_ionized_electrons_numba(
     N_batch, batch_size, elec_old_Ntot, ion_Ntot,
     cumulative_n_ionized, ionized_from,
     i_level, store_electrons_per_level,
-    elec_x, elec_y, elec_z, elec_inv_gamma,
+    elec_x, elec_y, elec_z, elec_gamma_minus_1,
     elec_ux, elec_uy, elec_uz, elec_w,
     elec_Ex, elec_Ey, elec_Ez, elec_Bx, elec_By, elec_Bz,
-    ion_x, ion_y, ion_z, ion_inv_gamma,
+    ion_x, ion_y, ion_z, ion_gamma_minus_1,
     ion_ux, ion_uy, ion_uz, ion_w,
     ion_Ex, ion_Ey, ion_Ez, ion_Bx, ion_By, ion_Bz ):
     """
@@ -109,13 +109,13 @@ def copy_ionized_electrons_numba(
             i_batch, batch_size, elec_old_Ntot, ion_Ntot,
             cumulative_n_ionized, ionized_from,
             i_level, store_electrons_per_level,
-            elec_x, elec_y, elec_z, elec_inv_gamma,
+            elec_x, elec_y, elec_z, elec_gamma_minus_1,
             elec_ux, elec_uy, elec_uz, elec_w,
             elec_Ex, elec_Ey, elec_Ez, elec_Bx, elec_By, elec_Bz,
-            ion_x, ion_y, ion_z, ion_inv_gamma,
+            ion_x, ion_y, ion_z, ion_gamma_minus_1,
             ion_ux, ion_uy, ion_uz, ion_w,
             ion_Ex, ion_Ey, ion_Ez, ion_Bx, ion_By, ion_Bz )
 
-    return( elec_x, elec_y, elec_z, elec_inv_gamma,
+    return( elec_x, elec_y, elec_z, elec_gamma_minus_1,
         elec_ux, elec_uy, elec_uz, elec_w,
         elec_Ex, elec_Ey, elec_Ez, elec_Bx, elec_By, elec_Bz )

@@ -67,7 +67,7 @@ class DepositMomentN ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    gammam1,
+    gamma_minus_1,
     dz, zmin,
     dr, rmin,
     ptcl_shape,
@@ -93,7 +93,7 @@ class DepositMomentN ( ArrayOp ):
       particle positions
     y : array
     z : array
-    gammam1 : array, optional
+    gamma_minus_1 : array, optional
       gamma - 1
 
       If specified, computes density * ( gamma - 1 )
@@ -116,7 +116,7 @@ class DepositMomentN ( ArrayOp ):
       cell_idx = cell_idx,
       prefix_sum = prefix_sum,
       x = x, y = y, z = z,
-      gammam1 = gammam1,
+      gamma_minus_1 = gamma_minus_1,
       dz = dz, zmin = zmin,
       dr = dr, rmin = rmin,
       gpu = gpu )
@@ -130,7 +130,7 @@ class DepositMomentN ( ArrayOp ):
     @cuda.jit
     def _cuda_linear_one_mode(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_m, m,
@@ -176,7 +176,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[ptcl_idx]
                 zj = z[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] * gammam1[ptcl_idx]
+                wj = q * w[ptcl_idx] * gamma_minus_1[ptcl_idx]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -235,7 +235,7 @@ class DepositMomentN ( ArrayOp ):
     @cuda.jit
     def _cuda_cubic_one_mode(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_m, m,
@@ -293,7 +293,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[ptcl_idx]
                 zj = z[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] * gammam1[ptcl_idx]
+                wj = q * w[ptcl_idx] * gamma_minus_1[ptcl_idx]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -402,7 +402,7 @@ class DepositMomentN ( ArrayOp ):
     @cuda.jit
     def _cuda_linear(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_m0, rho_m1,
@@ -452,7 +452,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[ptcl_idx]
                 zj = z[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] * gammam1[ptcl_idx]
+                wj = q * w[ptcl_idx] * gamma_minus_1[ptcl_idx]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -522,7 +522,7 @@ class DepositMomentN ( ArrayOp ):
     @cuda.jit
     def _cuda_cubic(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_m0, rho_m1,
@@ -611,7 +611,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[ptcl_idx]
                 zj = z[ptcl_idx]
                 # Weights
-                wj = q * w[ptcl_idx] * gammam1[ptcl_idx]
+                wj = q * w[ptcl_idx] * gamma_minus_1[ptcl_idx]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -757,7 +757,7 @@ class DepositMomentN ( ArrayOp ):
     @njit_parallel
     def _cpu_linear(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_global, Nm,
@@ -778,7 +778,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[i_ptcl]
                 zj = z[i_ptcl]
                 # Weights
-                wj = q * w[i_ptcl] * gammam1[i_ptcl]
+                wj = q * w[i_ptcl] * gamma_minus_1[i_ptcl]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -818,7 +818,7 @@ class DepositMomentN ( ArrayOp ):
     @njit_parallel
     def _cpu_cubic(
         x, y, z, w, q,
-        gammam1,
+        gamma_minus_1,
         invdz, zmin, Nz,
         invdr, rmin, Nr,
         rho_global, Nm,
@@ -839,7 +839,7 @@ class DepositMomentN ( ArrayOp ):
                 yj = y[i_ptcl]
                 zj = z[i_ptcl]
                 # Weights
-                wj = q * w[i_ptcl] * gammam1[i_ptcl]
+                wj = q * w[i_ptcl] * gamma_minus_1[i_ptcl]
 
                 # Cylindrical conversion
                 rj = math.sqrt(xj**2 + yj**2)
@@ -899,7 +899,7 @@ class DepositMomentN ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    gammam1,
+    gamma_minus_1,
     dz, zmin,
     dr, rmin,
     ptcl_shape, ):
@@ -913,13 +913,13 @@ class DepositMomentN ( ArrayOp ):
 
     ptcl_chunk_indices = get_chunk_indices(x.shape[0], nthreads)
 
-    if gammam1 is None:
-      gammam1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gammam1, 1.0 )
+    if gamma_minus_1 is None:
+      gamma_minus_1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
+      ndarray_fill( gamma_minus_1, 1.0 )
 
     if ptcl_shape == 'linear':
       self._cpu_linear(
-          x, y, z, weight, coeff, gammam1,
+          x, y, z, weight, coeff, gamma_minus_1,
           1./dz, zmin, grid[0].shape[0],
           1./dr, rmin, grid[0].shape[1],
           threaded_grid, len(grid),
@@ -927,7 +927,7 @@ class DepositMomentN ( ArrayOp ):
 
     elif ptcl_shape == 'cubic':
       self._cpu_cubic(
-          x, y, z, weight, coeff, gammam1,
+          x, y, z, weight, coeff, gamma_minus_1,
           1./dz, zmin, grid[0].shape[0],
           1./dr, rmin, grid[0].shape[1],
           threaded_grid, len(grid),
@@ -944,7 +944,7 @@ class DepositMomentN ( ArrayOp ):
     cell_idx,
     prefix_sum,
     x, y, z,
-    gammam1,
+    gamma_minus_1,
     dz, zmin,
     dr, rmin,
     ptcl_shape ):
@@ -961,9 +961,9 @@ class DepositMomentN ( ArrayOp ):
     dim_grid_2d_flat, dim_block_2d_flat = \
         cuda_tpb_bpg_1d(prefix_sum.shape[0], TPB=deposit_tpb)
 
-    if gammam1 is None:
-      gammam1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gammam1, 1.0 )
+    if gamma_minus_1 is None:
+      gamma_minus_1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
+      ndarray_fill( gamma_minus_1, 1.0 )
 
     if ptcl_shape == 'linear':
 
@@ -971,7 +971,7 @@ class DepositMomentN ( ArrayOp ):
 
         self._cuda_linear[
           dim_grid_2d_flat, dim_block_2d_flat](
-            x, y, z, weight, coeff, gammam1,
+            x, y, z, weight, coeff, gamma_minus_1,
             1./dz, zmin, grid[0].shape[0],
             1./dr, rmin, grid[0].shape[1],
             grid[0], grid[1],
@@ -981,7 +981,7 @@ class DepositMomentN ( ArrayOp ):
         for m in range(grid.shape[0]):
           self._cuda_linear_one_mode[
               dim_grid_2d_flat, dim_block_2d_flat](
-              x, y, z, weight, coeff, gammam1,
+              x, y, z, weight, coeff, gamma_minus_1,
               1./dz, zmin, grid[0].shape[0],
               1./dr, rmin, grid[0].shape[1],
               grid[m], m,
@@ -993,7 +993,7 @@ class DepositMomentN ( ArrayOp ):
 
         self._cuda_cubic[
           dim_grid_2d_flat, dim_block_2d_flat](
-            x, y, z, weight, coeff, gammam1,
+            x, y, z, weight, coeff, gamma_minus_1,
             1./dz, zmin, grid[0].shape[0],
             1./dr, rmin, grid[0].shape[1],
             grid[0], grid[1],
@@ -1003,7 +1003,7 @@ class DepositMomentN ( ArrayOp ):
         for m in range(len(grid)):
           self._cuda_cubic_one_mode[
             dim_grid_2d_flat, dim_block_2d_flat](
-              x, y, z, weight, coeff, gammam1,
+              x, y, z, weight, coeff, gamma_minus_1,
               1./dz, zmin, grid[0].shape[0],
               1./dr, rmin, grid[0].shape[1],
               grid[m], m,

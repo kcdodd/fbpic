@@ -13,7 +13,7 @@ from .inline_functions import push_p_vay
 push_p_vay = cuda.jit( push_p_vay, device=True, inline=True )
 
 @cuda.jit
-def push_x_gpu( x, y, z, ux, uy, uz, gammam1, dt,
+def push_x_gpu( x, y, z, ux, uy, uz, gamma_minus_1, dt,
                 x_push, y_push, z_push ) :
     """
     Advance the particles' positions over `dt` using the momenta ux, uy, uz,
@@ -28,7 +28,7 @@ def push_x_gpu( x, y, z, ux, uy, uz, gammam1, dt,
     ux, uy, uz : 1darray of floats
         The velocity of the particles. u is gamma*v/c
 
-    gammam1 : 1darray of floats
+    gamma_minus_1 : 1darray of floats
         gamma-1, kenetic part of Lorentz factor
 
     dt : float (seconds)
@@ -45,13 +45,13 @@ def push_x_gpu( x, y, z, ux, uy, uz, gammam1, dt,
     i = cuda.grid(1)
     if i < x.shape[0]:
         # Particle push
-        inv_g = 1. / ( 1 + gammam1[i] )
+        inv_g = 1. / ( 1 + gamma_minus_1[i] )
         x[i] += cdt*x_push*inv_g*ux[i]
         y[i] += cdt*y_push*inv_g*uy[i]
         z[i] += cdt*z_push*inv_g*uz[i]
 
 @cuda.jit
-def push_p_gpu( ux, uy, uz, gammam1,
+def push_p_gpu( ux, uy, uz, gamma_minus_1,
                 Ex, Ey, Ez, Bx, By, Bz,
                 q, m, Ntot, dt ) :
     """
@@ -63,7 +63,7 @@ def push_p_gpu( ux, uy, uz, gammam1,
         The velocity of the particles
         (is modified by this function)
 
-    gammam1 : 1darray of floats
+    gamma_minus_1 : 1darray of floats
         gamma-1, kenetic part of Lorentz factor
 
     Ex, Ey, Ez : 1darray of floats
@@ -93,13 +93,13 @@ def push_p_gpu( ux, uy, uz, gammam1,
 
     # Loop over the particles
     if ip < Ntot:
-        ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
-            ux[ip], uy[ip], uz[ip], gammam1[ip],
+        ux[ip], uy[ip], uz[ip], gamma_minus_1[ip] = push_p_vay(
+            ux[ip], uy[ip], uz[ip], gamma_minus_1[ip],
             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst)
 
 
 @cuda.jit
-def push_p_after_plane_gpu( z, z_plane, ux, uy, uz, gammam1,
+def push_p_after_plane_gpu( z, z_plane, ux, uy, uz, gamma_minus_1,
                 Ex, Ey, Ez, Bx, By, Bz, q, m, Ntot, dt ) :
     """
     Advance the particles' momenta, using cuda on the GPU.
@@ -125,13 +125,13 @@ def push_p_after_plane_gpu( z, z_plane, ux, uy, uz, gammam1,
 
     # Loop over the particles
     if ip < Ntot and z[ip] > z_plane:
-        ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
-            ux[ip], uy[ip], uz[ip], gammam1[ip],
+        ux[ip], uy[ip], uz[ip], gamma_minus_1[ip] = push_p_vay(
+            ux[ip], uy[ip], uz[ip], gamma_minus_1[ip],
             Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst)
 
 
 @cuda.jit
-def push_p_ioniz_gpu( ux, uy, uz, gammam1,
+def push_p_ioniz_gpu( ux, uy, uz, gamma_minus_1,
                 Ex, Ey, Ez, Bx, By, Bz,
                 m, Ntot, dt, ionization_level ) :
     """
@@ -157,6 +157,6 @@ def push_p_ioniz_gpu( ux, uy, uz, gammam1,
             econst = ionization_level[ip] * e * dt/(m*c)
             bconst = 0.5 * ionization_level[ip] * e * dt/m
             # Use the Vay pusher
-            ux[ip], uy[ip], uz[ip], gammam1[ip] = push_p_vay(
-                ux[ip], uy[ip], uz[ip], gammam1[ip],
+            ux[ip], uy[ip], uz[ip], gamma_minus_1[ip] = push_p_vay(
+                ux[ip], uy[ip], uz[ip], gamma_minus_1[ip],
                 Ex[ip], Ey[ip], Ez[ip], Bx[ip], By[ip], Bz[ip], econst, bconst)

@@ -105,9 +105,9 @@ def test_cherenkov_instability( show=False ):
 
         # Give a relativistic velocity to the particle, with some noise
         sim.ptcl[0].uz[:] = uz_m
-        sim.ptcl[0].inv_gamma[:] = 1./np.sqrt( 1 + sim.ptcl[0].uz**2 )
+        sim.ptcl[0].gamma_minus_1[:] = np.sqrt( 1 + sim.ptcl[0].uz**2 ) - 1
         sim.ptcl[1].uz[:] = uz_m
-        sim.ptcl[1].inv_gamma[:] = 1./np.sqrt( 1 + sim.ptcl[1].uz**2 )
+        sim.ptcl[1].gamma_minus_1[:] = np.sqrt( 1 + sim.ptcl[1].uz**2 ) - 1
 
         # Perform the simulation;
         # record the rms electric field every 50 timestep

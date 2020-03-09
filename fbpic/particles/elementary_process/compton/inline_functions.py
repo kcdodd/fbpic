@@ -41,7 +41,7 @@ def lorentz_transform( p_in, px_in, py_in, pz_in, gamma, beta, nx, ny, nz ):
 
 
 def get_scattering_probability(
-    dt, elec_ux, elec_uy, elec_uz, elec_inv_gamma,
+    dt, elec_ux, elec_uy, elec_uz, elec_gamma_minus_1,
     photon_n, photon_p, photon_beta_x, photon_beta_y, photon_beta_z ):
     """
     Return the probability of Comton scattering, for a given electron,
@@ -56,14 +56,14 @@ def get_scattering_probability(
     -----------
     dt: float (in seconds)
         Time interval considered, in the frame of the simulation.
-    elec_ux, elec_uy, elec_uz, elec_inv_gamma: floats (dimensionless)
+    elec_ux, elec_uy, elec_uz, elec_gamma_minus_1: floats (dimensionless)
         The momenta and inverse gamma factor of the emitting electron
         (in the frame of the simulation)
     photon_n, photon_p, photon_beta_x, photon_beta_y, photon_beta_z
         Properties of the photon flux (in the frame of the simulation)
     """
     # Get electron intermediate variable
-    elec_gamma = 1./elec_inv_gamma
+    elec_gamma = elec_gamma_minus_1 + 1
 
     # Get photon density and momentum in the rest frame of the electron
     transform_factor = elec_gamma \
@@ -77,7 +77,7 @@ def get_scattering_probability(
     f2 = ( 2 + k*(2-k) ) * math.log( 1 + 2*k ) / k**3
     sigma = PI_RE_2 * ( f1 - f2 )
     # Get the electron proper time
-    proper_dt_rest = dt * elec_inv_gamma
+    proper_dt_rest = dt / elec_gamma
     # Calculate the probability of scattering
     p = 1 - math.exp( - sigma * photon_n_rest * c * proper_dt_rest )
 

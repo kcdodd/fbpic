@@ -44,8 +44,8 @@ if cuda_installed:
     from fbpic.utils.cuda import cuda_tpb_bpg_1d
     from .cuda_methods import ionize_ions_cuda, copy_ionized_electrons_cuda
 if cupy_installed:
-    import cupy    
-    
+    import cupy
+
 class Ionizer(object):
     """
     Class that contains the data associated with ionization (on the ions side)
@@ -226,7 +226,7 @@ class Ionizer(object):
         # Skip this function if there are no ions
         if ion.Ntot == 0:
             return
-        
+
         # Process particles in batches (of typically 10, 20 particles)
         N_batch = int( ion.Ntot / self.batch_size ) + 1
         # Short-cuts
@@ -297,10 +297,10 @@ class Ionizer(object):
                     N_batch, self.batch_size, old_Ntot, ion.Ntot,
                     d_cumulative_n_ionized, ionized_from,
                     i_level, self.store_electrons_per_level,
-                    elec.x, elec.y, elec.z, elec.inv_gamma,
+                    elec.x, elec.y, elec.z, elec.gamma_minus_1,
                     elec.ux, elec.uy, elec.uz, elec.w,
                     elec.Ex, elec.Ey, elec.Ez, elec.Bx, elec.By, elec.Bz,
-                    ion.x, ion.y, ion.z, ion.inv_gamma,
+                    ion.x, ion.y, ion.z, ion.gamma_minus_1,
                     ion.ux, ion.uy, ion.uz, ion.w,
                     ion.Ex, ion.Ey, ion.Ez, ion.Bx, ion.By, ion.Bz )
                 # Mark the new electrons as unsorted
@@ -310,10 +310,10 @@ class Ionizer(object):
                     N_batch, self.batch_size, old_Ntot, ion.Ntot,
                     cumulative_n_ionized, ionized_from,
                     i_level, self.store_electrons_per_level,
-                    elec.x, elec.y, elec.z, elec.inv_gamma,
+                    elec.x, elec.y, elec.z, elec.gamma_minus_1,
                     elec.ux, elec.uy, elec.uz, elec.w,
                     elec.Ex, elec.Ey, elec.Ez, elec.Bx, elec.By, elec.Bz,
-                    ion.x, ion.y, ion.z, ion.inv_gamma,
+                    ion.x, ion.y, ion.z, ion.gamma_minus_1,
                     ion.ux, ion.uy, ion.uz, ion.w,
                     ion.Ex, ion.Ey, ion.Ez, ion.Bx, ion.By, ion.Bz )
 

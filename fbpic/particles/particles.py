@@ -148,7 +148,7 @@ class Particles(object) :
             self.use_cuda = False
 
         # Generate evenly-spaced particles
-        Ntot, x, y, z, ux, uy, uz, gammam1, w = generate_evenly_spaced(
+        Ntot, x, y, z, ux, uy, uz, gamma_minus_1, w = generate_evenly_spaced(
             Npz, zmin, zmax, Npr, rmin, rmax, Nptheta, n, dens_func,
             ux_m, uy_m, uz_m, ux_th, uy_th, uz_th )
 
@@ -166,7 +166,7 @@ class Particles(object) :
         self.ux = ux
         self.uy = uy
         self.uz = uz
-        self.gammam1 = gammam1
+        self.gamma_minus_1 = gamma_minus_1
         self.w = w
 
         # Initialize the fields array (at the positions of the particles)
@@ -197,7 +197,7 @@ class Particles(object) :
         self.compton_scatterer = None
         # Total number of quantities (necessary in MPI communications)
         self.n_integer_quantities = 0
-        self.n_float_quantities = 8 # x, y, z, ux, uy, uz, gammam1, w
+        self.n_float_quantities = 8 # x, y, z, ux, uy, uz, gamma_minus_1, w
 
         # Register particle shape
         self.particle_shape = particle_shape
@@ -259,7 +259,7 @@ class Particles(object) :
             self.ux = cuda.to_device(self.ux)
             self.uy = cuda.to_device(self.uy)
             self.uz = cuda.to_device(self.uz)
-            self.gammam1 = cuda.to_device(self.gammam1)
+            self.gamma_minus_1 = cuda.to_device(self.gamma_minus_1)
             self.w = cuda.to_device(self.w)
 
             # Copy arrays on the GPU for the field
@@ -297,7 +297,7 @@ class Particles(object) :
             self.ux = self.ux.copy_to_host()
             self.uy = self.uy.copy_to_host()
             self.uz = self.uz.copy_to_host()
-            self.gammam1 = self.gammam1.copy_to_host()
+            self.gamma_minus_1 = self.gamma_minus_1.copy_to_host()
             self.w = self.w.copy_to_host()
 
             # Copy arrays on the CPU for the field
@@ -334,7 +334,7 @@ class Particles(object) :
         assert self.continuous_injection == True
 
         # Have the continuous injector generate the new particles
-        Ntot, x, y, z, ux, uy, uz, gammam1, w = \
+        Ntot, x, y, z, ux, uy, uz, gamma_minus_1, w = \
                             self.injector.generate_particles( time )
 
         # Convert them to a particle buffer
@@ -346,7 +346,7 @@ class Particles(object) :
         float_buffer[3,:] = ux
         float_buffer[4,:] = uy
         float_buffer[5,:] = uz
-        float_buffer[6,:] = gammam1
+        float_buffer[6,:] = gamma_minus_1
         float_buffer[7,:] = w
         if self.ionizer is not None:
             # All new particles start at the default ionization level
@@ -513,7 +513,7 @@ class Particles(object) :
         # Iterate over (float) particle attributes
         attr_list = [ (self,'x'), (self,'y'), (self,'z'), \
                         (self,'ux'), (self,'uy'), (self,'uz'), \
-                        (self, 'w'), (self,'gammam1') ]
+                        (self, 'w'), (self,'gamma_minus_1') ]
         if self.keep_fields_sorted:
             attr_list += [ (self, 'Ex'), (self, 'Ey'), (self, 'Ez'), \
                             (self, 'Bx'), (self, 'By'), (self, 'Bz') ]
@@ -585,7 +585,7 @@ class Particles(object) :
                 # Ionizable species can have a charge that depends on the
                 # macroparticle, and hence require a different function
                 push_p_ioniz_gpu[dim_grid_1d, dim_block_1d](
-                    self.ux, self.uy, self.uz, self.gammam1,
+                    self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.m, self.Ntot, self.dt, self.ionizer.ionization_level )
@@ -594,14 +594,14 @@ class Particles(object) :
                 # require a different pusher
                 push_p_after_plane_gpu[dim_grid_1d, dim_block_1d](
                     self.z, z_plane,
-                    self.ux, self.uy, self.uz, self.gammam1,
+                    self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
             else:
                 # Standard pusher
                 push_p_gpu[dim_grid_1d, dim_block_1d](
-                    self.ux, self.uy, self.uz, self.gammam1,
+                    self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
@@ -611,7 +611,7 @@ class Particles(object) :
             if self.ionizer is not None:
                 # Ionizable species can have a charge that depends on the
                 # macroparticle, and hence require a different function
-                push_p_ioniz_numba(self.ux, self.uy, self.uz, self.gammam1,
+                push_p_ioniz_numba(self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez, self.Bx, self.By, self.Bz,
                     self.m, self.Ntot, self.dt, self.ionizer.ionization_level )
             elif z_plane is not None:
@@ -619,13 +619,13 @@ class Particles(object) :
                 # require a different pusher
                 push_p_after_plane_numba(
                     self.z, z_plane,
-                    self.ux, self.uy, self.uz, self.gammam1,
+                    self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez,
                     self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
             else:
                 # Standard pusher
-                push_p_numba(self.ux, self.uy, self.uz, self.gammam1,
+                push_p_numba(self.ux, self.uy, self.uz, self.gamma_minus_1,
                     self.Ex, self.Ey, self.Ez, self.Bx, self.By, self.Bz,
                     self.q, self.m, self.Ntot, self.dt )
 
@@ -654,14 +654,14 @@ class Particles(object) :
             push_x_gpu[dim_grid_1d, dim_block_1d](
                 self.x, self.y, self.z,
                 self.ux, self.uy, self.uz,
-                self.gammam1, dt, x_push, y_push, z_push )
+                self.gamma_minus_1, dt, x_push, y_push, z_push )
             # The particle array is unsorted after the push in x
             self.sorted = False
         # CPU version
         else:
             push_x_numba( self.x, self.y, self.z,
                 self.ux, self.uy, self.uz,
-                self.gammam1, self.Ntot,
+                self.gamma_minus_1, self.Ntot,
                 dt, x_push, y_push, z_push )
 
     def gather( self, grid, comm ) :
@@ -849,23 +849,20 @@ class Particles(object) :
           Indicates the moment of the particle distribution to compute
           ( density = 1/cell. multiply by cell/m^3 to get physical density )
 
-          'n' = density
-          'nke' = density * ( gamma - 1 )
-          'nv' = density * v / c
-          'nu' = density * gamma * v / c
+          'n' = coeff * density
+          'nke' = coeff * density * ( gamma - 1 )
+          'nv' = coeff * density * v / c
+          'np' = coeff * density * gamma * v / c
 
         grid : array
           arrays to deposite computed moment for each m mode
           ( nm = number of azimuthal modes )
 
           'n', 'nke' : (nm, nz, nr)
-          'nu', 'nv' : (nm, 3, nz, nr)
+          'np', 'nv' : (nm, 3, nz, nr)
 
         coeff : float, str, optional
           coefficient to multiply before adding to grid
-
-          if a string is passed as coeff == 'q', the species charge will be used
-          as coeff. If coeff == 'm', the species mass will be used.
 
         zmin : float
         dz : float
@@ -874,15 +871,11 @@ class Particles(object) :
         """
         # Shortcuts and safe-guards
 
-        assert moment in [ 'n', 'nke', 'nv', 'nu' ]
+        assert moment in [ 'n', 'nke', 'nv', 'np' ]
         assert self.particle_shape in [ 'linear', 'cubic' ]
 
         if coeff is None:
           coeff = 1.0
-        elif coeff == 'q':
-          coeff = self.q
-        elif coeff == 'm':
-          coeff = self.m
 
         if coeff == 0.0:
           return
@@ -920,9 +913,9 @@ class Particles(object) :
         if moment in [ 'n', 'nke' ]:
 
           if moment == 'n':
-            gammam1 = None
+            gamma_minus_1 = None
           else:
-            gammam1 = self.gammam1
+            gamma_minus_1 = self.gamma_minus_1
 
           deposit_moment_n.exec(
             grid,
@@ -931,16 +924,16 @@ class Particles(object) :
             self.cell_idx,
             self.prefix_sum,
             self.x, self.y, self.z,
-            gammam1,
+            gamma_minus_1,
             dz, zmin, dr, rmin,
             self.particle_shape )
 
-        elif moment in [ 'nv', 'nu' ]:
+        elif moment in [ 'nv', 'np' ]:
 
-          if moment == 'nu':
-            gammam1 = None
+          if moment == 'np':
+            gamma_minus_1 = None
           else:
-            gammam1 = self.gammam1
+            gamma_minus_1 = self.gamma_minus_1
 
           deposit_moment_nv.exec(
             grid,
@@ -949,7 +942,7 @@ class Particles(object) :
             self.cell_idx,
             self.prefix_sum,
             self.x, self.y, self.z,
-            gammam1,
+            gamma_minus_1,
             dz, zmin, dr, rmin,
             self.particle_shape )
 

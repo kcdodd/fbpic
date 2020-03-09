@@ -29,7 +29,7 @@ def test_constant_B( Bz, q, m, rmin, rmax, gammamin, gammamax,
     # Find the minimum dt
     w_larmor = q*Bz/m
     dt = 2*np.pi*gammamin/( abs(w_larmor)*Npts_per_gyr )
-    
+
     # Initialize the particle structure
     ptcl = Particles( q, m, 0., 1, 0., 0., Npart, rmin, rmax, 1, dt )
 
@@ -42,10 +42,10 @@ def test_constant_B( Bz, q, m, rmin, rmax, gammamin, gammamax,
     invr = 1./np.sqrt( ptcl.x**2 + ptcl.y**2 )
     ptcl.ux = utheta * ptcl.y * invr * np.sign(q)
     ptcl.uy = - utheta * ptcl.x * invr * np.sign(q)
-    ptcl.inv_gamma = 1./gamma
+    ptcl.gamma_minus_1 = np.maximum( gamma-1, 0.0 )
     # NB : the particles positions and momenta are considered
     # to be at t=0 initially
-    
+
     # Compute the total number of steps
     Nstep = N_gyr * Npts_per_gyr
     it = np.arange(1, Nstep+1)
@@ -65,7 +65,7 @@ def test_constant_B( Bz, q, m, rmin, rmax, gammamin, gammamax,
     y = np.zeros( (Nstep, Npart) )
     ux = np.zeros( (Nstep, Npart) )
     uy = np.zeros( (Nstep, Npart) )
-    
+
     # Push the particles over Nstep and record the corresponding history
     for i in range(Nstep) :
         # Push the particles
@@ -90,14 +90,14 @@ def test_constant_B( Bz, q, m, rmin, rmax, gammamin, gammamax,
     plt.plot( t, y, 'o' )
     plt.xlabel('t')
     plt.ylabel('y')
-    
+
     plt.figure()
     plt.subplot(aspect='equal')
     plt.plot( x_analytic, y_analytic, '--' )
     plt.plot( x, y, 'o' )
     plt.xlabel('x')
     plt.ylabel('y')
-    
+
 if __name__ == '__main__' :
 
     Bz = 1.
@@ -110,7 +110,7 @@ if __name__ == '__main__' :
     Npart = 4
     Npts_per_gyr = 20
     N_gyr = 5
-    
+
     test_constant_B( Bz, q, m, rmin, rmax, gammamin, gammamax,
             Npart, Npts_per_gyr, N_gyr )
 

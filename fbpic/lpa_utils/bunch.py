@@ -182,16 +182,18 @@ def add_particle_bunch_gaussian(sim, q, m, sig_r, sig_z, n_emit, gamma0,
     """
     # Generate Gaussian gamma distribution of the beam
     if sig_gamma > 0.:
-        gamma = np.random.normal(gamma0, sig_gamma, n_macroparticles)
+        gamma_minus_1 = np.abs(
+          np.random.normal(0.0, sig_gamma, n_macroparticles)
+          + max(gamma0-1, 0.0) )
     else:
         # Zero energy spread beam
-        gamma = np.full(n_macroparticles, gamma0)
+        gamma_minus_1 = np.full(n_macroparticles, max(gamma0-1, 0.0 ) )
         if sig_gamma < 0.:
             warnings.warn(
                 "Negative energy spread sig_gamma detected."
                 " sig_gamma will be set to zero. \n")
     # Get inverse gamma
-    inv_gamma = 1. / gamma
+    inv_gamma = 1. / (gamma_minus_1 + 1)
     # Get Gaussian particle distribution in x,y,z
     x = sig_r * np.random.normal(0., 1., n_macroparticles)
     y = sig_r * np.random.normal(0., 1., n_macroparticles)
@@ -205,7 +207,8 @@ def add_particle_bunch_gaussian(sim, q, m, sig_r, sig_z, n_emit, gamma0,
 
     # Finally we calculate the uz of each particle
     # from the gamma and the transverse momenta ux, uy
-    uz_sqr = (gamma ** 2 - 1) - ux ** 2 - uy ** 2
+    # uz_sqr = (gamma ** 2 - 1) - ux ** 2 - uy ** 2
+    uz_sqr = ( gamma_minus_1*(gamma_minus_1+2) ) - ux ** 2 - uy ** 2
 
     # Check for unphysical particles with uz**2 < 0
     mask = uz_sqr >= 0
@@ -224,7 +227,7 @@ def add_particle_bunch_gaussian(sim, q, m, sig_r, sig_z, n_emit, gamma0,
         z = z[mask]
         ux = ux[mask]
         uy = uy[mask]
-        inv_gamma = inv_gamma[mask]
+        gamma_minus_1 = gamma_minus_1[mask]
         uz_sqr = uz_sqr[mask]
     # Calculate longitudinal momentum of the bunch
     uz = np.sqrt(uz_sqr)
@@ -241,7 +244,7 @@ def add_particle_bunch_gaussian(sim, q, m, sig_r, sig_z, n_emit, gamma0,
     # Save beam distribution to an .npz file
     if save_beam is not None:
         np.savez(save_beam, x=x, y=y, z=z, ux=ux, uy=uy, uz=uz,
-            inv_gamma=inv_gamma, w=w)
+            gamma_minus_1=gamma_minus_1, w=w)
 
     # Add the electrons to the simulation
     ptcl_bunch = add_particle_bunch_from_arrays(sim, q, m, x, y, z, ux, uy, uz,
@@ -466,11 +469,17 @@ def add_particle_bunch_from_arrays(sim, q, m, x, y, z, ux, uy, uz, w,
        Whether to calculate the initial space charge fields of the bunch
        and add these fields to the fields on the grid (Default: True)
     """
-    inv_gamma = 1./np.sqrt( 1. + ux**2 + uy**2 + uz**2 )
+    u2 = ux**2 + uy**2 + uz**2
+
+    if u2 < 1e-6:
+      gamma_minus_1 = 0.5 * u2
+    else:
+      gamma_minus_1 = np.sqrt( 1. + u2 ) - 1.0
+
     # Convert the particles to the boosted-frame
     if boost is not None:
-        x, y, z, ux, uy, uz, inv_gamma = boost.boost_particle_arrays(
-                                        x, y, z, ux, uy, uz, inv_gamma )
+        x, y, z, ux, uy, uz, gamma_minus_1 = boost.boost_particle_arrays(
+                                        x, y, z, ux, uy, uz, gamma_minus_1 )
 
     # Select the particles that are in the local subdomain
     zmin, zmax = sim.comm.get_zmin_zmax(
@@ -483,7 +492,7 @@ def add_particle_bunch_from_arrays(sim, q, m, x, y, z, ux, uy, uz, w,
     uy = uy[selected]
     uz = uz[selected]
     w = w[selected]
-    inv_gamma = inv_gamma[selected]
+    gamma_minus_1 = gamma_minus_1[selected]
 
     # Create electron species with no macroparticles
     ptcl_bunch = sim.add_new_species( q=q, m=m )
@@ -499,7 +508,7 @@ def add_particle_bunch_from_arrays(sim, q, m, x, y, z, ux, uy, uz, w,
     ptcl_bunch.ux[:] = ux[:]
     ptcl_bunch.uy[:] = uy[:]
     ptcl_bunch.uz[:] = uz[:]
-    ptcl_bunch.inv_gamma[:] = inv_gamma[:]
+    ptcl_bunch.gamma_minus_1[:] = gamma_minus_1[:]
     ptcl_bunch.w[:] = w[:]
 
     # Initialize the injection plane for the particles
@@ -818,7 +827,7 @@ def get_space_charge_fields( sim, ptcl, direction='forward' ):
 
     # Calculate the mean gamma by computing weighted sum on each subdomain
     w_sum_local = ptcl.w.sum()
-    w_gamma_sum_local = (ptcl.w*1./ptcl.inv_gamma).sum()
+    w_gamma_sum_local = ( ptcl.w * (ptcl.gamma_minus_1 + 1 ) ).sum()
     if sim.comm.mpi_comm is None:
         w_sum = w_sum_local
         w_gamma_sum = w_gamma_sum_local

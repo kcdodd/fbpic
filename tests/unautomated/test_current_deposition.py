@@ -23,7 +23,7 @@ def a(z, x, y, w0, a0, k0, ctau, z0 ) :
     grid
 
     NB : the pulse envelope is centered on z = 0
-    
+
     Parameters
     ----------
     z, x, y : 1darrays of floats (one element per macroparticles)
@@ -46,7 +46,7 @@ def Jr(z, r, w0, a0, k0, ctau, z0, n, q, pol ) :
     """
     Returns the analytical expression of the current along r in the mode 1
     on a given grid.
-    
+
     Parameters
     ----------
     z, r : 1darrays of floats (meters)
@@ -60,13 +60,13 @@ def Jr(z, r, w0, a0, k0, ctau, z0, n, q, pol ) :
 
     n, q : floats
         Density (meters^-3), charge (Coulomb) and mass (kg) of the particles
-    
+
     pol : string
-        Polarization of the laser. Either 'x' or 'y'    
+        Polarization of the laser. Either 'x' or 'y'
     """
     # Build 2d arrays from the 1d arrays
     r, z = np.meshgrid( r, z, copy=True )
-    
+
     # Get the amlitude of the vector potential,
     # in the azimuthal Fourier decomposition
     a_on_grid = a( z, r, 0, w0, a0, k0, ctau, z0 )
@@ -111,9 +111,9 @@ def impart_momenta( ptcl, a0, w0, ctau, k0, z0, pol ) :
         raise ValueError('Illegal polarization : %s' %pol)
 
     # Calculate the corresponding Lorentz factor
-    ptcl.inv_gamma = 1./np.sqrt( 1 + ptcl.ux**2 + ptcl.uy**2 + ptcl.uz**2 )
+    ptcl.gamma_minus_1 = np.sqrt( 1 + ptcl.ux**2 + ptcl.uy**2 + ptcl.uz**2 ) - 1
 
-    
+
 def deposit_current( ptcl, fld ) :
     """
     Deposit the current from the particles `ptcl` onto the fields `fld`
@@ -125,7 +125,7 @@ def deposit_current( ptcl, fld ) :
     """
     fld.erase('J')
     ptcl.deposit( fld, 'J')
-    fld.divide_by_volume('J') 
+    fld.divide_by_volume('J')
 
 def compare( Jr_analytic, Jr_simulation ) :
     """
@@ -137,7 +137,7 @@ def compare( Jr_analytic, Jr_simulation ) :
     plt.imshow( Jr_analytic.T[::-1].real, aspect='auto', interpolation='nearest' )
     plt.colorbar()
     plt.title('Analytical Jr (real part)')
-    
+
     plt.subplot(322)
     plt.imshow( Jr_analytic.T[::-1].imag, aspect='auto', interpolation='nearest' )
     plt.colorbar()
@@ -147,7 +147,7 @@ def compare( Jr_analytic, Jr_simulation ) :
     plt.imshow( Jr_simulation.T[::-1].real, aspect='auto', interpolation='nearest' )
     plt.colorbar()
     plt.title('Deposited Jr (real part)')
-    
+
     plt.subplot(324)
     plt.imshow( Jr_simulation.T[::-1].imag, aspect='auto', interpolation='nearest' )
     plt.colorbar()
@@ -164,11 +164,11 @@ def compare( Jr_analytic, Jr_simulation ) :
     plt.plot( Jr_simulation[:,0].imag, label='Deposited' )
     plt.title('On-axis Jr (imaginary part)')
     plt.legend(loc=0)
-    
+
     plt.show()
-    
-    
-    
+
+
+
 if __name__ == '__main__' :
 
     # Dimensions of the box on which the laser field will
@@ -191,7 +191,7 @@ if __name__ == '__main__' :
     p_nt = 2
     n = 9.e24
     q = -e
-    
+
     # Initialize the different structures
     sim = Simulation( Nz, zmax, Nr, rmax, Nm, zmax/Nz/c,
         0, zmax, 0, rmax, p_nz, p_nr, p_nt, n )

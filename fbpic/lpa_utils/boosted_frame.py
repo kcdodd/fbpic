@@ -219,7 +219,7 @@ class BoostConverter( object ):
 
         return( boosted_frame_vars )
 
-    def boost_particle_arrays( self, x, y, z, ux, uy, uz, inv_gamma ):
+    def boost_particle_arrays( self, x, y, z, ux, uy, uz, gamma_minus_1 ):
         """
         Transforms particles to the boosted frame and propagates
         them to a fixed time t_boost = 0. without taking any electromagnetic
@@ -234,8 +234,8 @@ class BoostConverter( object ):
         ux, uy, uz: 1darray of floats (dimensionless)
             The momenta of the particles
             (One element per macroparticle)
-        inv_gamma: 1darray of floats (dimensionless)
-            The inverse of the Lorentz factor
+        gamma_minus_1: 1darray of floats (dimensionless)
+            The Lorentz factor - 1
             (One element per macroparticle)
 
         Returns
@@ -247,6 +247,8 @@ class BoostConverter( object ):
         # at a single time t'. Therefore, move of all particles to
         # a single time t' = const. in the boosted frame.
         uz_boost = self.gamma0*self.beta0
+
+        inv_gamma = 1. / ( gamma_minus_1 + 1 )
 
         # Transform particle times and longitudinal positions
         # to the boosted frame. Assumes a lab time t = 0.
@@ -274,12 +276,19 @@ class BoostConverter( object ):
         new_z = z_boost - t_boost * vz_boost
 
         # Get final quantities
-        new_inv_gamma = np.sqrt(1.-(vx_boost**2+vy_boost**2+vz_boost**2)/c**2)
+        v2 = ( vx_boost**2 + vy_boost**2 + vz_boost**2 )/ c**2
+
+        if v2 < 1e-6:
+          new_gamma_minus_1 = 0.5 * v2
+        else:
+          new_gamma_minus_1 = 1. / np.sqrt(1.-v2) - 1.
+
+        new_inv_gamma = 1. / (new_gamma_minus_1 + 1 )
         new_ux = vx_boost / (new_inv_gamma * c)
         new_uy = vy_boost / (new_inv_gamma * c)
         new_uz = vz_boost / (new_inv_gamma * c)
 
-        return( new_x, new_y, new_z, new_ux, new_uy, new_uz, new_inv_gamma )
+        return( new_x, new_y, new_z, new_ux, new_uy, new_uz, new_gamma_minus_1 )
 
     # Miscellaneous
     # -------------

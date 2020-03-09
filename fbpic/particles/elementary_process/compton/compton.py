@@ -187,14 +187,14 @@ class ComptonScatterer(object):
             determine_scatterings_cuda[ batch_grid_1d, batch_block_1d ](
                 N_batch, self.batch_size, elec.Ntot,
                 nscatter_per_elec, nscatter_per_batch, random_states,
-                elec.dt, elec.ux, elec.uy, elec.uz, elec.inv_gamma,
+                elec.dt, elec.ux, elec.uy, elec.uz, elec.gamma_minus_1,
                 self.ratio_w_electron_photon, photon_n, self.photon_p,
                 self.photon_beta_x, self.photon_beta_y, self.photon_beta_z )
         else:
             determine_scatterings_numba(
                 N_batch, self.batch_size, elec.Ntot,
                 nscatter_per_elec, nscatter_per_batch,
-                elec.dt, elec.ux, elec.uy, elec.uz, elec.inv_gamma,
+                elec.dt, elec.ux, elec.uy, elec.uz, elec.gamma_minus_1,
                 self.ratio_w_electron_photon, photon_n, self.photon_p,
                 self.photon_beta_x, self.photon_beta_y, self.photon_beta_z )
 
@@ -223,9 +223,9 @@ class ComptonScatterer(object):
                 N_batch, self.batch_size, old_Ntot, elec.Ntot,
                 cumul_nscatter_per_batch, nscatter_per_elec, random_states,
                 self.photon_p, self.photon_px, self.photon_py, self.photon_pz,
-                photons.x, photons.y, photons.z, photons.inv_gamma,
+                photons.x, photons.y, photons.z, photons.gamma_minus_1,
                 photons.ux, photons.uy, photons.uz, photons.w,
-                elec.x, elec.y, elec.z, elec.inv_gamma, elec.ux, elec.uy,
+                elec.x, elec.y, elec.z, elec.gamma_minus_1, elec.ux, elec.uy,
                 elec.uz, elec.w, self.inv_ratio_w_elec_photon )
             photons.sorted = False
         else:
@@ -233,9 +233,9 @@ class ComptonScatterer(object):
                 N_batch, self.batch_size, old_Ntot, elec.Ntot,
                 cumul_nscatter_per_batch, nscatter_per_elec,
                 self.photon_p, self.photon_px, self.photon_py, self.photon_pz,
-                photons.x, photons.y, photons.z, photons.inv_gamma,
+                photons.x, photons.y, photons.z, photons.gamma_minus_1,
                 photons.ux, photons.uy, photons.uz, photons.w,
-                elec.x, elec.y, elec.z, elec.inv_gamma, elec.ux, elec.uy,
+                elec.x, elec.y, elec.z, elec.gamma_minus_1, elec.ux, elec.uy,
                 elec.uz, elec.w, self.inv_ratio_w_elec_photon )
 
         # If the photons are tracked, generate new ids

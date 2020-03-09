@@ -110,7 +110,7 @@ def remove_particles_cpu(species, fld, n_guard, left_proc, right_proc):
         float_send_left[3,:] = species.ux[selec_left]
         float_send_left[4,:] = species.uy[selec_left]
         float_send_left[5,:] = species.uz[selec_left]
-        float_send_left[6,:] = species.inv_gamma[selec_left]
+        float_send_left[6,:] = species.gamma_minus_1[selec_left]
         float_send_left[7,:] = species.w[selec_left]
         i_attr = 0
         if species.tracker is not None:
@@ -136,7 +136,7 @@ def remove_particles_cpu(species, fld, n_guard, left_proc, right_proc):
         float_send_right[3,:] = species.ux[selec_right]
         float_send_right[4,:] = species.uy[selec_right]
         float_send_right[5,:] = species.uz[selec_right]
-        float_send_right[6,:] = species.inv_gamma[selec_right]
+        float_send_right[6,:] = species.gamma_minus_1[selec_right]
         float_send_right[7,:] = species.w[selec_right]
         i_attr = 0
         if species.tracker is not None:
@@ -160,7 +160,7 @@ def remove_particles_cpu(species, fld, n_guard, left_proc, right_proc):
     species.ux = species.ux[selec_stay]
     species.uy = species.uy[selec_stay]
     species.uz = species.uz[selec_stay]
-    species.inv_gamma = species.inv_gamma[selec_stay]
+    species.gamma_minus_1 = species.gamma_minus_1[selec_stay]
     species.w = species.w[selec_stay]
     if species.tracker is not None:
         species.tracker.id = species.tracker.id[selec_stay]
@@ -256,7 +256,7 @@ def remove_particles_gpu(species, fld, n_guard, left_proc, right_proc):
     # Build list of float attributes to copy
     attr_list = [ (species,'x'), (species,'y'), (species,'z'),
                     (species,'ux'), (species,'uy'), (species,'uz'),
-                    (species,'inv_gamma'), (species,'w') ]
+                    (species,'gamma_minus_1'), (species,'w') ]
     if species.ionizer is not None:
         attr_list.append( (species.ionizer,'w_times_level') )
     # Loop through the float attributes
@@ -401,8 +401,8 @@ def add_buffers_cpu( species, float_recv_left, float_recv_right,
     species.ux = np.hstack((float_recv_left[3],species.ux,float_recv_right[3]))
     species.uy = np.hstack((float_recv_left[4],species.uy,float_recv_right[4]))
     species.uz = np.hstack((float_recv_left[5],species.uz,float_recv_right[5]))
-    species.inv_gamma = \
-        np.hstack((float_recv_left[6], species.inv_gamma, float_recv_right[6]))
+    species.gamma_minus_1 = \
+        np.hstack((float_recv_left[6], species.gamma_minus_1, float_recv_right[6]))
     species.w = np.hstack((float_recv_left[7], species.w, float_recv_right[7]))
     i_attr = 0
     if species.tracker is not None:
@@ -453,7 +453,7 @@ def add_buffers_gpu( species, float_recv_left, float_recv_right,
     # Build list of float attributes to copy
     attr_list = [ (species,'x'), (species,'y'), (species,'z'), \
                   (species,'ux'), (species,'uy'), (species,'uz'), \
-                  (species,'inv_gamma'), (species,'w') ]
+                  (species,'gamma_minus_1'), (species,'w') ]
     if species.ionizer is not None:
         attr_list += [ (species.ionizer, 'w_times_level') ]
     # Loop through the float quantities

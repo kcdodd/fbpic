@@ -157,7 +157,7 @@ def run_simulation( gamma_boost, show ):
           initial_total_elec_px, initial_total_elec_py, initial_total_elec_pz )
 
     # Transform the photon momenta back into the lab frame
-    photon_u = 1./photons.inv_gamma
+    photon_u = photons.gamma_minus_1 + 1
     photon_lab_pz = boost.gamma0*( photons.uz + boost.beta0*photon_u )
     photon_lab_p = boost.gamma0*( photon_u + boost.beta0*photons.uz )
 

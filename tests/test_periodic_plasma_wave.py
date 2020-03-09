@@ -307,7 +307,7 @@ def impart_momenta( ptcl, epsilons, k0, w0, wp) :
     ptcl.uy = uy(ptcl.z, r, ptcl.x, ptcl.y, epsilons, k0, w0, wp, 0)
     ptcl.uz = uz(ptcl.z, r, ptcl.x, ptcl.y, epsilons, k0, w0, wp, 0)
     # Get the corresponding inverse gamma
-    ptcl.inv_gamma = 1./np.sqrt( 1 + ptcl.ux**2 + ptcl.uy**2 + ptcl.uz**2 )
+    ptcl.gamma_minus_1 = np.sqrt( 1 + ptcl.ux**2 + ptcl.uy**2 + ptcl.uz**2 ) - 1.
 
 # --------------------
 # Diagnostic function
