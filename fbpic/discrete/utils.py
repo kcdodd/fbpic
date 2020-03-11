@@ -9,6 +9,7 @@ from fbpic.utils.threading import (
 
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
+  from numba import cuda
   from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d
 
 from .array_op import ArrayOp
@@ -36,6 +37,17 @@ def tmp_numba_device_ndarray( shape, dtype ):
   and should always be reinitialized.
   """
   return cuda.to_device( np.empty( shape, dtype = dtype ) )
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+def empty_ndarray( shape, dtype, device = False ):
+  """Generates a cached uninitialized array, numpy or DeviceNDArray
+  """
+  arr = np.empty( shape, dtype = dtype )
+
+  if device:
+    return cuda.to_device( arr )
+  else:
+    return arr
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class NDArrayFill ( ArrayOp ):

@@ -15,6 +15,7 @@ from .utils.threading import threading_enabled, numba_minor_version
 # Check if CUDA is available, then import CUDA functions
 from .utils.cuda import cuda_installed, cupy_installed, cupy_major_version
 if cuda_installed:
+    from numba import cuda
     from .utils.cuda import send_data_to_gpu, \
                 receive_data_from_gpu, mpi_select_gpus
     mpi_select_gpus( MPI )
@@ -26,11 +27,16 @@ import warnings
 import numba
 import numpy as np
 from scipy.constants import m_e, m_p, e, c
+from collections import namedtuple
+
 from .utils.printing import ProgressBar, print_simulation_setup
 from .particles import Particles
 from .lpa_utils.boosted_frame import BoostConverter
 from .fields import Fields
 from .boundaries import BoundaryCommunicator, MovingWindow
+from .discrete import ndarray_fill, empty_ndarray
+
+Grid = namedtuple("Grid", "invdz zmin Nz invdr rmin Nr Er Et Ez Br Bt Bz" )
 
 class Simulation(object):
     """
@@ -285,6 +291,34 @@ class Simulation(object):
                     # Only create threading buffers when running on CPU
                     create_threading_buffers=(self.use_cuda is False) )
 
+
+        dz = self.fld.interp[0].dz
+        dr = self.fld.interp[0].dr
+
+        self.external_axial_frame_fields = []
+        self.ext_field_grids = [Grid(
+          invdz = self.fld.interp[0].invdz,
+          zmin = zmin,
+          Nz = Nz,
+          invdr = self.fld.interp[0].invdr,
+          rmin = 0.0,
+          Nr = Nr,
+          Er = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
+          Et = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
+          Ez = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
+          Br = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
+          Bt = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
+          Bz = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ) )]
+
+        self.ext_z, self.ext_r = np.meshgrid(
+          np.linspace(zmin + 0.5 * dz, zmax - 0.5 * dz, Nz),
+          np.linspace(0.5 * dr, rmax - 0.5 * dr, Nr),
+          indexing='ij' )
+
+        if self.use_cuda:
+          self.ext_z = cuda.to_device( self.ext_z)
+          self.ext_r = cuda.to_device( self.ext_r)
+
         # Initialize the electrons and the ions
         self.grid_shape = self.fld.interp[0].Ez.shape
         self.particle_shape = particle_shape
@@ -465,9 +499,26 @@ class Simulation(object):
             for species in ptcl:
                 species.keep_fields_sorted = True
 
+            ext_grid = self.ext_field_grids[0]
+
+            ndarray_fill.exec( ext_grid.Er, 0.0 )
+            ndarray_fill.exec( ext_grid.Et, 0.0 )
+            ndarray_fill.exec( ext_grid.Ez, 0.0 )
+            ndarray_fill.exec( ext_grid.Br, 0.0 )
+            ndarray_fill.exec( ext_grid.Bt, 0.0 )
+            ndarray_fill.exec( ext_grid.Bz, 0.0 )
+
+            for ext_field in self.external_axial_frame_fields:
+              ext_field.exec(
+                r = self.ext_r, z = self.ext_z, t = self.time,
+                Er = ext_grid.Er, Et = ext_grid.Et, Ez = ext_grid.Ez,
+                Br = ext_grid.Br, Bt = ext_grid.Bt, Bz = ext_grid.Bz )
+
             # Gather the fields from the grid at t = n dt
             for ps in ptcl:
               ps.gather( fld.interp, self.comm )
+
+              ps.gather( self.ext_field_grids, self.comm )
 
               for ext_field in self.external_frame_fields:
                   ext_field.exec(

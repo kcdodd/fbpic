@@ -5,4 +5,5 @@ from .array_op import (
 from .utils import (
   tmp_ndarray,
   tmp_numba_device_ndarray,
-  ndarray_fill )
+  ndarray_fill,
+  empty_ndarray )
