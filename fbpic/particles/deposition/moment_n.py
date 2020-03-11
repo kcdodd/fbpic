@@ -119,6 +119,7 @@ class DepositMomentN ( ArrayOp ):
       gamma_minus_1 = gamma_minus_1,
       dz = dz, zmin = zmin,
       dr = dr, rmin = rmin,
+      ptcl_shape = ptcl_shape,
       gpu = gpu )
 
   #-----------------------------------------------------------------------------
@@ -909,13 +910,13 @@ class DepositMomentN ( ArrayOp ):
     threaded_shape = (nthreads, len(grid) ) + grid[0].shape
     # allocate temporary array for parallel writes from each thread
     threaded_grid = tmp_ndarray( threaded_shape, dtype = grid[0].dtype )
-    ndarray_fill( threaded_grid, 0.0 )
+    ndarray_fill.exec( threaded_grid, 0.0 )
 
     ptcl_chunk_indices = get_chunk_indices(x.shape[0], nthreads)
 
     if gamma_minus_1 is None:
       gamma_minus_1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gamma_minus_1, 1.0 )
+      ndarray_fill.exec( gamma_minus_1, 1.0 )
 
     if ptcl_shape == 'linear':
       self._cpu_linear(
@@ -963,7 +964,7 @@ class DepositMomentN ( ArrayOp ):
 
     if gamma_minus_1 is None:
       gamma_minus_1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gamma_minus_1, 1.0 )
+      ndarray_fill.exec( gamma_minus_1, 1.0 )
 
     if ptcl_shape == 'linear':
 
@@ -978,7 +979,7 @@ class DepositMomentN ( ArrayOp ):
             cell_idx, prefix_sum)
       else:
 
-        for m in range(grid.shape[0]):
+        for m in range(len(grid)):
           self._cuda_linear_one_mode[
               dim_grid_2d_flat, dim_block_2d_flat](
               x, y, z, weight, coeff, gamma_minus_1,

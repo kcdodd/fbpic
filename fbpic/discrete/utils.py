@@ -54,7 +54,7 @@ class NDArrayFill ( ArrayOp ):
     value : float, int
     """
 
-    super().exec( array = array, fill = fill, gpu = gpu )
+    super().exec( array = array, value = value, gpu = gpu )
 
   #-----------------------------------------------------------------------------
   def init_numba_cuda( self ):
@@ -84,7 +84,10 @@ class NDArrayFill ( ArrayOp ):
   #-----------------------------------------------------------------------------
   def exec_numba_cuda ( self, array, value ):
 
-    farray = array.ravel()
+    if len(array.shape) == 1:
+      farray = array
+    else:
+      farray = array.ravel()
 
     bpg, tpb = cuda_tpb_bpg_1d( farray.shape[0] )
 
@@ -92,8 +95,10 @@ class NDArrayFill ( ArrayOp ):
 
   #-----------------------------------------------------------------------------
   def exec_cpu( self, array, value ):
-
-    farray = array.ravel()
+    if len(array.shape) == 1:
+      farray = array
+    else:
+      farray = array.ravel()
 
     nt = farray.shape[0] // nthreads
     nf = farray.shape[0] % nthreads

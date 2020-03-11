@@ -207,7 +207,15 @@ def remove_particles_gpu(species, fld, n_guard, left_proc, right_proc):
     # (The particles are usually expected to be sorted from the previous
     # iteration at this point - except at the first iteration of `step`.)
     if species.sorted == False:
-        species.sort_particles(fld = fld)
+        # species.sort_particles(fld = fld)
+        species.sort_particles(
+          zmin = fld.zmin,
+          dz = ( fld.zmax - fld.zmin ) / fld.Nz,
+          nz = fld.Nz,
+          rmin = 0.0,
+          dr = fld.rmax / fld.Nr,
+          nr = fld.Nr )
+
         species.sorted = True
 
     # Get the particle indices between which to remove the particles

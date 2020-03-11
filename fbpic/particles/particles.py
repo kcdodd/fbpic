@@ -834,11 +834,11 @@ class Particles(object) :
     def deposit( self,
         moment,
         grid,
-        coeff,
         zmin,
         dz,
         rmin,
-        dr ) :
+        dr,
+        coeff = None ) :
         """
         Deposit the particles distribution moments onto 2d grid for each
         azimuthal mode.
@@ -918,15 +918,15 @@ class Particles(object) :
             gamma_minus_1 = self.gamma_minus_1
 
           deposit_moment_n.exec(
-            grid,
-            coeff,
-            weight,
-            self.cell_idx,
-            self.prefix_sum,
-            self.x, self.y, self.z,
-            gamma_minus_1,
-            dz, zmin, dr, rmin,
-            self.particle_shape )
+            grid = grid,
+            coeff = coeff,
+            weight = self.w,
+            cell_idx = self.cell_idx,
+            prefix_sum = self.prefix_sum,
+            x = self.x, y = self.y, z = self.z,
+            gamma_minus_1 = gamma_minus_1,
+            dz = dz, zmin = zmin, dr = dr, rmin = rmin,
+            ptcl_shape = self.particle_shape )
 
         elif moment in [ 'nv', 'np' ]:
 
@@ -936,15 +936,16 @@ class Particles(object) :
             gamma_minus_1 = self.gamma_minus_1
 
           deposit_moment_nv.exec(
-            grid,
-            coeff,
-            weight,
-            self.cell_idx,
-            self.prefix_sum,
-            self.x, self.y, self.z,
-            gamma_minus_1,
-            dz, zmin, dr, rmin,
-            self.particle_shape )
+            grid = grid,
+            coeff = coeff,
+            weight = self.w,
+            cell_idx = self.cell_idx,
+            prefix_sum = self.prefix_sum,
+            x = self.x, y = self.y, z = self.z,
+            ux = self.ux, uy = self.uy, uz = self.uz,
+            gamma_minus_1 = gamma_minus_1,
+            dz = dz, zmin = zmin, dr = dr, rmin = rmin,
+            ptcl_shape = self.particle_shape )
 
     #---------------------------------------------------------------------------
     def sort_particles(self,

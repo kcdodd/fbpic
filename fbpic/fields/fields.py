@@ -117,6 +117,8 @@ class Fields(object) :
         # Register the arguments inside the object
         self.Nz = Nz
         self.Nr = Nr
+        self.zmin = zmin
+        self.zmax = zmax
         self.rmax = rmax
         self.Nm = Nm
         self.dt = dt

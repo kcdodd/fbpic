@@ -122,6 +122,7 @@ class DepositMomentNV ( ArrayOp ):
       gamma_minus_1 = gamma_minus_1,
       dz = dz, zmin = zmin,
       dr = dr, rmin = rmin,
+      ptcl_shape = ptcl_shape,
       gpu = gpu )
 
   #-----------------------------------------------------------------------------
@@ -1444,7 +1445,7 @@ class DepositMomentNV ( ArrayOp ):
         invdr, rmin, Nr,
         grid, Nm,
         nthreads, ptcl_chunk_indices):
-      
+
         # Deposit the field per cell in parallel (for threads < number of cells)
         for i_thread in prange( nthreads ):
 
@@ -1576,16 +1577,16 @@ class DepositMomentNV ( ArrayOp ):
 
     assert ptcl_shape in ['linear', 'cubic']
 
-    threaded_shape = (nthreads, len(grid) ) + grid[0].shape
+    threaded_shape = (nthreads, len(grid), 3 ) + grid[0][0].shape
     # allocate temporary array for parallel writes from each thread
     threaded_grid = tmp_ndarray( threaded_shape, dtype = grid[0][0].dtype )
-    ndarray_fill( threaded_grid, 0. )
+    ndarray_fill.exec( threaded_grid, 0. )
 
     ptcl_chunk_indices = get_chunk_indices(x.shape[0], nthreads)
 
     if gamma_minus_1 is None:
       gamma_minus_1 = tmp_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gamma_minus_1, 0.0 )
+      ndarray_fill.exec( gamma_minus_1, 0.0 )
 
     # Deposit J using CPU threading
     if ptcl_shape == 'linear':
@@ -1593,8 +1594,8 @@ class DepositMomentNV ( ArrayOp ):
         x, y, z, weight, coeff,
         ux, uy, uz,
         gamma_minus_1,
-        1./dz, zmin, grid[0].shape[1],
-        1./dr, rmin, grid[0].shape[2],
+        1./dz, zmin, grid[0][0].shape[0],
+        1./dr, rmin, grid[0][0].shape[1],
         threaded_grid, len(grid),
         nthreads, ptcl_chunk_indices )
 
@@ -1603,8 +1604,8 @@ class DepositMomentNV ( ArrayOp ):
         x, y, z, weight, coeff,
         ux, uy, uz,
         gamma_minus_1,
-        1./dz, zmin, grid[0].shape[1],
-        1./dr, rmin, grid[0].shape[2],
+        1./dz, zmin, grid[0][0].shape[0],
+        1./dr, rmin, grid[0][0].shape[1],
         threaded_grid, len(grid),
         nthreads, ptcl_chunk_indices )
 
@@ -1642,7 +1643,7 @@ class DepositMomentNV ( ArrayOp ):
 
     if gamma_minus_1 is None:
       gamma_minus_1 = tmp_numba_device_ndarray( shape = x.shape, dtype = x.dtype )
-      ndarray_fill( gamma_minus_1, 0.0 )
+      ndarray_fill.exec( gamma_minus_1, 0.0 )
 
     # Deposit J in each of four directions
     if ptcl_shape == 'linear':
@@ -1652,8 +1653,8 @@ class DepositMomentNV ( ArrayOp ):
             x, y, z, weight, coeff,
             ux, uy, uz,
             gamma_minus_1,
-            1./dz, zmin, grid[0].shape[1],
-            1./dr, rmin, grid[0].shape[2],
+            1./dz, zmin, grid[0][0].shape[0],
+            1./dr, rmin, grid[0][0].shape[1],
             grid[0][0], grid[1][0],
             grid[0][1], grid[1][1],
             grid[0][2], grid[1][2],
@@ -1665,8 +1666,8 @@ class DepositMomentNV ( ArrayOp ):
               x, y, z, weight, coeff,
               ux, uy, uz,
               gamma_minus_1,
-              1./dz, zmin, grid[0].shape[1],
-              1./dr, rmin, grid[0].shape[2],
+              1./dz, zmin, grid[0][0].shape[0],
+              1./dr, rmin, grid[0][0].shape[1],
               grid[m][0], grid[m][1], grid[m][2], m,
               cell_idx, prefix_sum )
 
@@ -1677,8 +1678,8 @@ class DepositMomentNV ( ArrayOp ):
             x, y, z, weight, coeff,
             ux, uy, uz,
             gamma_minus_1,
-            1./dz, zmin, grid[0].shape[1],
-            1./dr, rmin, grid[0].shape[2],
+            1./dz, zmin, grid[0][0].shape[0],
+            1./dr, rmin, grid[0][0].shape[1],
             grid[0][0], grid[1][0],
             grid[0][1], grid[1][1],
             grid[0][2], grid[1][2],
@@ -1690,8 +1691,8 @@ class DepositMomentNV ( ArrayOp ):
               x, y, z, weight, coeff,
               ux, uy, uz,
               gamma_minus_1,
-              1./dz, zmin, grid[0].shape[1],
-              1./dr, rmin, grid[0].shape[2],
+              1./dz, zmin, grid[0][0].shape[0],
+              1./dr, rmin, grid[0][0].shape[1],
               grid[m][0], grid[m][1], grid[m][2], m,
               cell_idx, prefix_sum )
 
