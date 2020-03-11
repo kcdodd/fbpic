@@ -673,7 +673,7 @@ class Simulation(object):
                     fld.interp[m].Jt,
                     fld.interp[m].Jz ]
                     for m in range(fld.Nm) ],
-                  coeff = species.q,
+                  coeff = c * species.q,
                   zmin = fld.interp[0].zmin,
                   dz = fld.interp[0].dz,
                   rmin = fld.interp[0].rmin,
