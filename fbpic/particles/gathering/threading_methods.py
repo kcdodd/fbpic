@@ -169,9 +169,9 @@ def gather_field_numba_linear(x, y, z,
                 S_ll, S_lu, S_lg, S_ul, S_uu, S_ug )
         # Convert to Cartesian coordinates
         # and write to particle field arrays
-        Ex[i] = cos*Fr - sin*Ft
-        Ey[i] = sin*Fr + cos*Ft
-        Ez[i] = Fz
+        Ex[i] += cos*Fr - sin*Ft
+        Ey[i] += sin*Fr + cos*Ft
+        Ez[i] += Fz
 
         # B-Field
         # -------
@@ -194,9 +194,9 @@ def gather_field_numba_linear(x, y, z,
                 S_ll, S_lu, S_lg, S_ul, S_uu, S_ug )
         # Convert to Cartesian coordinates
         # and write to particle field arrays
-        Bx[i] = cos*Fr - sin*Ft
-        By[i] = sin*Fr + cos*Ft
-        Bz[i] = Fz
+        Bx[i] += cos*Fr - sin*Ft
+        By[i] += sin*Fr + cos*Ft
+        Bz[i] += Fz
 
     return Ex, Ey, Ez, Bx, By, Bz
 
@@ -337,9 +337,9 @@ def gather_field_numba_cubic(x, y, z,
                     ir_lowest, iz_lowest, Sr, Sz, Nr, Nz )
             # Convert to Cartesian coordinates
             # and write to particle field arrays
-            Ex[i] = cos*Fr - sin*Ft
-            Ey[i] = sin*Fr + cos*Ft
-            Ez[i] = Fz
+            Ex[i] += cos*Fr - sin*Ft
+            Ey[i] += sin*Fr + cos*Ft
+            Ez[i] += Fz
 
             # B-Field
             # -------
@@ -360,8 +360,8 @@ def gather_field_numba_cubic(x, y, z,
                     ir_lowest, iz_lowest, Sr, Sz, Nr, Nz )
             # Convert to Cartesian coordinates
             # and write to particle field arrays
-            Bx[i] = cos*Fr - sin*Ft
-            By[i] = sin*Fr + cos*Ft
-            Bz[i] = Fz
+            Bx[i] += cos*Fr - sin*Ft
+            By[i] += sin*Fr + cos*Ft
+            Bz[i] += Fz
 
     return Ex, Ey, Ez, Bx, By, Bz

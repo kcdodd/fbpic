@@ -516,6 +516,8 @@ class Simulation(object):
 
             # Gather the fields from the grid at t = n dt
             for ps in ptcl:
+              ps.gather_clear()
+              
               ps.gather( fld.interp, self.comm )
 
               ps.gather( self.ext_field_grids, self.comm )

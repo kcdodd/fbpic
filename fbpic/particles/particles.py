@@ -49,6 +49,9 @@ from .deposition import (
   deposit_moment_n,
   deposit_moment_nv )
 
+from fbpic.discrete import (
+  ndarray_fill )
+
 class Particles(object) :
     """
     Class that contains the particles data of the simulation
@@ -664,6 +667,16 @@ class Particles(object) :
                 self.gamma_minus_1, self.Ntot,
                 dt, x_push, y_push, z_push )
 
+    #---------------------------------------------------------------------------
+    def gather_clear( self ):
+        ndarray_fill.exec( self.Ex, 0.0 )
+        ndarray_fill.exec( self.Ey, 0.0 )
+        ndarray_fill.exec( self.Ez, 0.0 )
+        ndarray_fill.exec( self.Bx, 0.0 )
+        ndarray_fill.exec( self.By, 0.0 )
+        ndarray_fill.exec( self.Bz, 0.0 )
+
+    #---------------------------------------------------------------------------
     def gather( self, grid, comm ) :
         """
         Gather the fields onto the macroparticles
@@ -713,9 +726,6 @@ class Particles(object) :
                          self.Bx, self.By, self.Bz)
                 else:
                     # Generic version for arbitrary number of modes
-                    erase_eb_cuda[dim_grid_1d, dim_block_1d](
-                                    self.Ex, self.Ey, self.Ez,
-                                    self.Bx, self.By, self.Bz, self.Ntot )
                     for m in range(Nm):
                         gather_field_gpu_linear_one_mode[
                             dim_grid_1d, dim_block_1d](
@@ -743,9 +753,6 @@ class Particles(object) :
                          self.Bx, self.By, self.Bz)
                 else:
                     # Generic version for arbitrary number of modes
-                    erase_eb_cuda[dim_grid_1d, dim_block_1d](
-                                    self.Ex, self.Ey, self.Ez,
-                                    self.Bx, self.By, self.Bz, self.Ntot )
                     for m in range(Nm):
                         gather_field_gpu_cubic_one_mode[
                             dim_grid_1d, dim_block_1d](
@@ -779,8 +786,6 @@ class Particles(object) :
                         self.Bx, self.By, self.Bz)
                 else:
                     # Generic version for arbitrary number of modes
-                    erase_eb_numba( self.Ex, self.Ey, self.Ez,
-                                    self.Bx, self.By, self.Bz, self.Ntot )
                     for m in range(Nm):
                         gather_field_numba_linear_one_mode(
                             self.x, self.y, self.z,
@@ -812,8 +817,6 @@ class Particles(object) :
                         nthreads, ptcl_chunk_indices )
                 else:
                     # Generic version for arbitrary number of modes
-                    erase_eb_numba( self.Ex, self.Ey, self.Ez,
-                                    self.Bx, self.By, self.Bz, self.Ntot )
                     for m in range(Nm):
                         gather_field_numba_cubic_one_mode(
                             self.x, self.y, self.z,
