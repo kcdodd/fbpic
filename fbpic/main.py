@@ -36,6 +36,12 @@ from .fields import Fields
 from .boundaries import BoundaryCommunicator, MovingWindow
 from .discrete import ndarray_fill, empty_ndarray
 
+from .external import (
+  ExternalFrameField,
+  ExternalSymmetricFrameField,
+  ExternalFrameCharge,
+  ExternalFrameCurrent )
+
 Grid = namedtuple("Grid", "invdz zmin Nz invdr rmin Nr Er Et Ez Br Bt Bz" )
 
 class Simulation(object):
@@ -295,7 +301,11 @@ class Simulation(object):
         dz = self.fld.interp[0].dz
         dr = self.fld.interp[0].dr
 
-        self.external_axial_frame_fields = []
+        self._ext_frame_charges = []
+        self._ext_frame_currents = []
+
+        # working arrays for external fields
+        self._ext_symmetric_frame_fields = []
         self.ext_field_grids = [Grid(
           invdz = self.fld.interp[0].invdz,
           zmin = zmin,
@@ -345,7 +355,7 @@ class Simulation(object):
         # Initialize an empty list of external fields
         self.external_fields = []
         # Initialize an empty list of external frame fields
-        self._external_frame_fields = []
+        self._ext_frame_fields = []
         # Initialize an empty list of diagnostics and checkpoints
         # (Checkpoints are used for restarting the simulation)
         self.diags = []
@@ -359,32 +369,111 @@ class Simulation(object):
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     @property
     def external_frame_fields(self):
+      return self._ext_frame_fields
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def set_ext_frame_fields(self, fields):
       """External fields specified in the solution reference frame
 
-      Must be instances of ArrayOp with a functtion signature:
-      f(x, y, z, t, Ex, Ey, Ez, Bx, By, Bz)
+      Must be instances of ExternalFrameField
 
       positions x,y,z are arrays of the same shape as the field arrays.
       The current time t is a float,
       The function should add the field to the existing array value (aka +=),
       but not change values of x,y,z.
       """
-      return self._external_frame_fields
 
-    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    @external_frame_fields.setter
-    def external_frame_fields(self, fields):
-      if not all( isinstance( f, ArrayOp ) for f in fields ):
-        msg = f"all fields must be instance of ArrayOp: {[type(f) for f in fields]}"
+      if not all( isinstance( f, ExternalFrameField ) for f in fields ):
+        msg = f"all fields must be instance of ExternalFrameField: {[type(f) for f in fields]}"
 
         raise ValueError(msg)
 
-      self._external_frame_fields = fields
+      self._ext_frame_fields = fields
 
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    def step(self, N=1, correct_currents=True,
-             correct_divE=False, use_true_rho=False,
-             move_positions=True, move_momenta=True, show_progress=True):
+    @property
+    def ext_symmetric_frame_fields(self):
+      return self._ext_symmetric_frame_fields
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def set_ext_symmetric_frame_fields(self, fields):
+      """External axially symmetric fields specified in the solution reference frame
+
+      Must be instances of ExternalSymmetricFrameField
+
+      positions r,z are arrays of the same shape as the field arrays.
+      The current time t is a float,
+      The function should add the field to the existing array value (aka +=),
+      but not change values of r,z.
+      """
+
+      if not all( isinstance( f, ExternalSymmetricFrameField ) for f in fields ):
+        msg = f"all fields must be instance of ExternalSymmetricFrameField: {[type(f) for f in fields]}"
+
+        raise ValueError(msg)
+
+      self._ext_symmetric_frame_fields = fields
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    @property
+    def ext_frame_charges(self):
+      return self._ext_frame_charges
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def set_ext_frame_charges(self, sources):
+      """External axially symmetric charge density specified in the solution reference frame
+
+      Must be instances of ExternalFrameCharge
+
+      positions r,z are arrays of the same shape as the field arrays.
+      The current time t is a float,
+      The function should add the source (rho) to the existing
+      array value (aka +=),
+      """
+
+      if not all( isinstance( f, ExternalFrameCharge ) for f in sources ):
+        msg = f"all sources must be instance of ExternalFrameSource: {[type(f) for f in sources]}"
+
+        raise ValueError(msg)
+
+      self._ext_frame_charges = sources
+
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    @property
+    def ext_frame_currents(self):
+      return self._ext_frame_currents
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def set_ext_frame_currents(self, sources):
+      """External axially symmetric source specified in the solution reference frame
+
+      Must be instances of ExternalFrameCurrent
+
+      positions r,z are arrays of the same shape as the field arrays.
+      The current time t is a float,
+      The function should add the source (Jr, Jt, Jz) to the existing
+      array value (aka +=),
+      """
+
+      if not all( isinstance( f, ExternalFrameCurrent ) for f in sources ):
+        msg = f"all sources must be instance of ExternalFrameCurrent: {[type(f) for f in sources]}"
+
+        raise ValueError(msg)
+
+      self._ext_frame_currents = sources
+
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def step(self,
+        N=1,
+        correct_currents=True,
+        correct_divE=False,
+        use_true_rho=False,
+        move_positions=True,
+        move_momenta=True,
+        compute_phi = False,
+        show_progress=True ):
         """
         Perform N PIC cycles.
 
@@ -409,6 +498,9 @@ class Simulation(object):
 
         move_momenta: bool, optional
             Whether to move or freeze the particles' momenta
+
+        compute_phi : bool, optional
+            Whether to compute potential 'phi'
 
         show_progress: bool, optional
             Whether to show a progression bar
@@ -485,22 +577,23 @@ class Simulation(object):
                 # Reproject the charge on the interpolation grid
                 # (Since particles have been removed / added to the simulation;
                 # otherwise rho_prev is obtained from the previous iteration.)
-                self.deposit('rho_prev', exchange=(use_true_rho is True))
+                self.deposit('rho_prev', t = self.time, exchange=(use_true_rho is True))
 
             # For the field diagnostics of the first step: deposit J
             # (Note however that this is not the *corrected* current)
             if i_step == 0:
-                self.deposit('J', exchange=True)
+              self.deposit('J', t = self.time, exchange=True)
 
             # Main PIC iteration
             # ------------------
 
             # Keep field arrays sorted throughout gathering+push
             for species in ptcl:
-                species.keep_fields_sorted = True
+              species.keep_fields_sorted = True
 
             ext_grid = self.ext_field_grids[0]
 
+            # precompute symmetric external fields onto zeroed arrays
             ndarray_fill.exec( ext_grid.Er, 0.0 )
             ndarray_fill.exec( ext_grid.Et, 0.0 )
             ndarray_fill.exec( ext_grid.Ez, 0.0 )
@@ -508,7 +601,7 @@ class Simulation(object):
             ndarray_fill.exec( ext_grid.Bt, 0.0 )
             ndarray_fill.exec( ext_grid.Bz, 0.0 )
 
-            for ext_field in self.external_axial_frame_fields:
+            for ext_field in self._ext_symmetric_frame_fields:
               ext_field.exec(
                 r = self.ext_r, z = self.ext_z, t = self.time,
                 Er = ext_grid.Er, Et = ext_grid.Et, Ez = ext_grid.Ez,
@@ -517,20 +610,23 @@ class Simulation(object):
             # Gather the fields from the grid at t = n dt
             for ps in ptcl:
               ps.gather_clear()
-              
+
+              # gather simulation fields
               ps.gather( fld.interp, self.comm )
 
+              # gather symmetric external frame fields
               ps.gather( self.ext_field_grids, self.comm )
 
               for ext_field in self.external_frame_fields:
-                  ext_field.exec(
-                    x = ps.x, y = ps.y, z = ps.z, t = self.time,
-                    Ex = ps.Ex, Ey = ps.Ey, Ez = ps.Ez,
-                    Bx = ps.Bx, By = ps.By, Bz = ps.Bz )
+                # apply non-symmetric frame fields to particles
+                ext_field.exec(
+                  x = ps.x, y = ps.y, z = ps.z, t = self.time,
+                  Ex = ps.Ex, Ey = ps.Ey, Ez = ps.Ez,
+                  Bx = ps.Bx, By = ps.By, Bz = ps.Bz )
 
             # Apply the external fields at t = n dt
             for ext_field in self.external_fields:
-                ext_field.apply_expression( self.ptcl, self.time )
+              ext_field.apply_expression( self.ptcl, self.time )
 
 
 
@@ -570,7 +666,7 @@ class Simulation(object):
 
             # Get the current at t = (n+1/2) dt
             # (Guard cell exchange done either now or after current correction)
-            self.deposit('J', exchange=(correct_currents is False))
+            self.deposit('J', t = self.time + 0.5 * dt, exchange=(correct_currents is False))
 
             # Perform cross-deposition if needed
             if correct_currents and fld.current_correction=='cross-deposition':
@@ -588,7 +684,7 @@ class Simulation(object):
                 self.shift_galilean_boundaries( 0.5*dt )
 
             # Get the charge density at t = (n+1) dt
-            self.deposit('rho_next', exchange=(use_true_rho is True))
+            self.deposit('rho_next', t = self.time + dt, exchange=(use_true_rho is True))
             # Correct the currents (requires rho at t = (n+1) dt )
             if correct_currents:
                 fld.correct_currents( check_exchanges=(self.comm.size > 1) )
@@ -606,6 +702,9 @@ class Simulation(object):
 
             if correct_divE:
                 fld.correct_divE()
+
+            if compute_phi:
+              fld.compute_phi()
 
             # Move the grids if needed
             if self.comm.moving_win is not None:
@@ -648,8 +747,8 @@ class Simulation(object):
         if show_progress and (self.comm.rank==0):
             progress_bar.print_summary()
 
-
-    def deposit( self, fieldtype, exchange=False,
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def deposit( self, fieldtype, t, exchange=False,
                 update_spectral=True, species_list=None ):
         """
         Deposit the charge or the currents to the interpolation grid
@@ -690,7 +789,7 @@ class Simulation(object):
 
         # Charge
         if fieldtype.startswith('rho'):  # e.g. rho_next, rho_prev, etc.
-            fld.erase('rho')
+            self.fld.erase('rho')
             # Deposit the particle charge
             for species in species_list:
                 # species.deposit( fld, 'rho' )
@@ -709,13 +808,31 @@ class Simulation(object):
             fld.sum_reduce_deposition_array('rho')
             # Divide by cell volume
             fld.divide_by_volume('rho')
+
+            # external charge sources
+            grid = fld.interp[0]
+            for ext_source in self._ext_frame_charges:
+              ext_source.exec(
+                r = self.ext_r,
+                z = self.ext_z,
+                t = t,
+                Er = grid.Er,
+                Et = grid.Et,
+                Ez = grid.Ez,
+                phi = grid.phi,
+                Br = grid.Br,
+                Bt = grid.Bt,
+                Bz = grid.Bz,
+                rho = grid.rho )
+
             # Exchange guard cells if requested by the user
             if exchange and self.comm.size > 1:
                 self.comm.exchange_fields(fld.interp, 'rho', 'add')
 
         # Currents
         elif fieldtype == 'J':
-            fld.erase('J')
+            self.fld.erase('J')
+
             # Deposit the particle current
             for species in species_list:
                 # species.deposit( fld, 'J' )
@@ -738,6 +855,25 @@ class Simulation(object):
             fld.sum_reduce_deposition_array('J')
             # Divide by cell volume
             fld.divide_by_volume('J')
+
+            # external current sources
+            grid = fld.interp[0]
+            for ext_source in self._ext_frame_currents:
+              ext_source.exec(
+                r = self.ext_r,
+                z = self.ext_z,
+                t = t,
+                Er = grid.Er,
+                Et = grid.Et,
+                Ez = grid.Ez,
+                phi = grid.phi,
+                Br = grid.Br,
+                Bt = grid.Bt,
+                Bz = grid.Bz,
+                Jr = grid.Jr,
+                Jt = grid.Jt,
+                Jz = grid.Jz )
+
             # Exchange guard cells if requested by the user
             if exchange and self.comm.size > 1:
                 self.comm.exchange_fields(fld.interp, 'J', 'add')

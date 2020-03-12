@@ -16,6 +16,8 @@ from .numba_methods import numba_push_eb_standard, numba_push_eb_comoving, \
     numba_filter_scalar, numba_filter_vector, \
     numba_correct_divE
 
+from .potential import integrate_potential
+
 # Check if CUDA is available, then import CUDA functions
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
@@ -88,6 +90,7 @@ class SpectralGrid(object) :
         self.Ep = np.zeros( (Nz, Nr), dtype='complex' )
         self.Em = np.zeros( (Nz, Nr), dtype='complex' )
         self.Ez = np.zeros( (Nz, Nr), dtype='complex' )
+        self.phi = np.zeros( (Nz, Nr), dtype='complex' )
         self.Bp = np.zeros( (Nz, Nr), dtype='complex' )
         self.Bm = np.zeros( (Nz, Nr), dtype='complex' )
         self.Bz = np.zeros( (Nz, Nr), dtype='complex' )
@@ -149,6 +152,7 @@ class SpectralGrid(object) :
         self.Ep = cuda.to_device( self.Ep )
         self.Em = cuda.to_device( self.Em )
         self.Ez = cuda.to_device( self.Ez )
+        self.phi = cuda.to_device( self.phi )
         self.Bp = cuda.to_device( self.Bp )
         self.Bm = cuda.to_device( self.Bm )
         self.Bz = cuda.to_device( self.Bz )
@@ -178,6 +182,7 @@ class SpectralGrid(object) :
         self.Ep = self.Ep.copy_to_host()
         self.Em = self.Em.copy_to_host()
         self.Ez = self.Ez.copy_to_host()
+        self.phi = self.phi.copy_to_host()
         self.Bp = self.Bp.copy_to_host()
         self.Bm = self.Bm.copy_to_host()
         self.Bz = self.Bz.copy_to_host()
@@ -196,7 +201,11 @@ class SpectralGrid(object) :
             self.rho_next_z = self.rho_next_z.copy_to_host()
             self.rho_next_xy = self.rho_next_xy.copy_to_host()
 
+    #---------------------------------------------------------------------------
+    def compute_phi(self):
+      integrate_potential.exec( phi = self.phi, Ez = self.Ez, kz = self.kz )
 
+    #---------------------------------------------------------------------------
     def correct_currents (self, dt, ps, current_correction ):
         """
         Correct the currents so that they satisfy the

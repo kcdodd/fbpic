@@ -265,6 +265,12 @@ class Fields(object) :
             self.spect[m].push_eb_with( self.psatd[m], use_true_rho )
             self.spect[m].push_rho()
 
+    #---------------------------------------------------------------------------
+    def compute_phi(self):
+      for m in range(self.Nm) :
+          self.spect[m].compute_phi()
+
+    #---------------------------------------------------------------------------
     def correct_currents(self, check_exchanges=False) :
         """
         Correct the currents so that they satisfy the
@@ -374,6 +380,8 @@ class Fields(object) :
             for m in range(self.Nm) :
                 self.trans[m].spect2interp_scal(
                     self.spect[m].Ez, self.interp[m].Ez )
+                self.trans[m].spect2interp_scal(
+                    self.spect[m].phi, self.interp[m].phi )
                 self.trans[m].spect2interp_vect(
                     self.spect[m].Ep,  self.spect[m].Em,
                     self.interp[m].Er, self.interp[m].Et )
@@ -442,6 +450,8 @@ class Fields(object) :
             for m in range(self.Nm) :
                 self.trans[m].fft.inverse_transform(
                     self.spect[m].Ez, self.interp[m].Ez )
+                self.trans[m].fft.inverse_transform(
+                    self.spect[m].phi, self.interp[m].phi )
                 self.trans[m].fft.inverse_transform(
                     self.spect[m].Ep, self.interp[m].Er )
                 self.trans[m].fft.inverse_transform(

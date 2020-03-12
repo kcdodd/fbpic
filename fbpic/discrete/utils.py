@@ -87,8 +87,10 @@ class NDArrayFill ( ArrayOp ):
     def _cpu( array, value, np, nt, nf ):
 
       for i in prange( np ):
+        offset = i*nt
+
         for j in range(nt):
-          array[i*nt + j] = value
+          array[offset + j] = value
 
       for j in range(nf):
         array[j] = value
@@ -96,25 +98,21 @@ class NDArrayFill ( ArrayOp ):
   #-----------------------------------------------------------------------------
   def exec_numba_cuda ( self, array, value ):
 
-    if len(array.shape) == 1:
-      farray = array
-    else:
-      farray = array.ravel()
+    if len(array.shape) > 1:
+      array = array.ravel()
 
-    bpg, tpb = cuda_tpb_bpg_1d( farray.shape[0] )
+    bpg, tpb = cuda_tpb_bpg_1d( array.shape[0] )
 
-    self._gpu[bpg, tpb]( farray, value )
+    self._gpu[bpg, tpb]( array, value )
 
   #-----------------------------------------------------------------------------
   def exec_cpu( self, array, value ):
-    if len(array.shape) == 1:
-      farray = array
-    else:
-      farray = array.ravel()
+    if len(array.shape) > 1:
+      array = array.ravel()
 
-    nt = farray.shape[0] // nthreads
-    nf = farray.shape[0] % nthreads
+    nt = array.shape[0] // nthreads
+    nf = array.shape[0] % nthreads
 
-    self._cpu( farray, value, nthreads, nt, nf )
+    self._cpu( array, value, nthreads, nt, nf )
 
 ndarray_fill = NDArrayFill()
