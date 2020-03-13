@@ -16,7 +16,7 @@ from .numba_methods import numba_push_eb_standard, numba_push_eb_comoving, \
     numba_filter_scalar, numba_filter_vector, \
     numba_correct_divE
 
-from .potential import integrate_potential
+from .potential import solve_potential
 
 # Check if CUDA is available, then import CUDA functions
 from fbpic.utils.cuda import cuda_installed
@@ -203,7 +203,14 @@ class SpectralGrid(object) :
 
     #---------------------------------------------------------------------------
     def compute_phi(self):
-      integrate_potential.exec( phi = self.phi, Ez = self.Ez, kz = self.kz )
+      solve_potential.exec(
+        phi = self.phi,
+        Ep = self.Ep,
+        Em = self.Em,
+        Ez = self.Ez,
+        inv_k2 = self.inv_k2,
+        kr = self.kr,
+        kz = self.kz )
 
     #---------------------------------------------------------------------------
     def correct_currents (self, dt, ps, current_correction ):

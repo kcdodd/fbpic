@@ -18,20 +18,28 @@ if cuda_installed:
   from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-class IntegratePotential ( ArrayOp ):
-  """Integrates electric field along z direction with zero at infinity
+class SolvePotential ( ArrayOp ):
+  """Solves potential defined as div(grad(phi)) = div(E)
   """
 
   #-----------------------------------------------------------------------------
   def exec (self,
     phi,
+    Ep,
+    Em,
     Ez,
+    inv_k2,
+    kr,
     kz,
     gpu = False ):
 
     super().exec(
       phi = phi,
+      Ep = Ep,
+      Em = Em,
       Ez = Ez,
+      inv_k2 = inv_k2,
+      kr = kr,
       kz = kz,
       gpu = gpu )
 
@@ -41,15 +49,17 @@ class IntegratePotential ( ArrayOp ):
 
     @self.attr
     @cuda.jit
-    def _gpu( phi, Ez, kz ):
+    def _gpu( phi, Ep, Em, Ez, inv_k2, kr, kz ):
 
       i = cuda.grid(1)
 
       if i < phi.shape[0]:
-        if kz[i] == 0.0:
+        divE = kr[i]*( Ep[i] - Em[i] ) + 1.j*kz[i]*Ez[i]
+
+        if inv_k2[i] == 0.0:
           phi[i] = 0.0
         else:
-          phi[i] = Ez[i] / ( 1j * kz[i] )
+          phi[i] = divE * inv_k2[i]
 
   #-----------------------------------------------------------------------------
   def init_cpu( self ):
@@ -60,40 +70,88 @@ class IntegratePotential ( ArrayOp ):
 
       for i in prange( np ):
         offset = i*nt
+
         for j in range(nt):
-          if kz[offset + j] == 0.0:
+          divE = kr[offset + j]*( Ep[offset + j] - Em[offset + j] ) + 1.j*kz[offset + j]*Ez[offset + j]
+
+          if inv_k2[offset + j] == 0.0:
             phi[offset + j] = 0.0
           else:
-            phi[offset + j] = Ez[offset + j] / ( 1j * kz[offset + j] )
+            phi[offset + j] = divE * inv_k2[offset + j]
+
+
+      offset = np * nt
 
       for j in range(nf):
-        if kz[j] == 0.0:
-          phi[j] = 0.0
+        divE = kr[offset + j]*( Ep[offset + j] - Em[offset + j] ) + 1.j*kz[offset + j]*Ez[offset + j]
+
+        if inv_k2[offset + j] == 0.0:
+          phi[offset + j] = 0.0
         else:
-          phi[j] = Ez[j] / ( 1j * kz[j] )
+          phi[offset + j] = divE * inv_k2[offset + j]
 
   #-----------------------------------------------------------------------------
-  def exec_numba_cuda ( self, phi, Ez, kz ):
+  def exec_numba_cuda ( self,
+    phi,
+    Ep,
+    Em,
+    Ez,
+    inv_k2,
+    kr,
+    kz ):
 
     if len(phi.shape) > 1:
       phi = phi.ravel()
+      Ep = Ep.ravel()
+      Em = Em.ravel()
       Ez = Ez.ravel()
+      inv_k2 = inv_k2.ravel()
+      kr = kr.ravel()
       kz = kz.ravel()
 
     bpg, tpb = cuda_tpb_bpg_1d( phi.shape[0] )
 
-    self._gpu[bpg, tpb]( phi, Ez, kz )
+    self._gpu[bpg, tpb](
+      phi,
+      Ep,
+      Em,
+      Ez,
+      inv_k2,
+      kr,
+      kz )
 
   #-----------------------------------------------------------------------------
-  def exec_cpu( self, phi, Ez, kz ):
+  def exec_cpu( self,
+    phi,
+    Ep,
+    Em,
+    Ez,
+    inv_k2,
+    kr,
+    kz ):
+
     if len(phi.shape) > 1:
       phi = phi.ravel()
+      Ep = Ep.ravel()
+      Em = Em.ravel()
       Ez = Ez.ravel()
+      inv_k2 = inv_k2.ravel()
+      kr = kr.ravel()
       kz = kz.ravel()
 
     nt = phi.shape[0] // nthreads
     nf = phi.shape[0] % nthreads
 
-    self._cpu( phi, Ez, kz, nthreads, nt, nf )
+    self._cpu(
+        phi,
+        Ep,
+        Em,
+        Ez,
+        inv_k2,
+        kr,
+        kz,
+        nthreads,
+        nt,
+        nf )
 
-integrate_potential = IntegratePotential()
+solve_potential = SolvePotential()

@@ -92,8 +92,10 @@ class NDArrayFill ( ArrayOp ):
         for j in range(nt):
           array[offset + j] = value
 
+      offset = np * nt
+
       for j in range(nf):
-        array[j] = value
+        array[offset + j] = value
 
   #-----------------------------------------------------------------------------
   def exec_numba_cuda ( self, array, value ):
