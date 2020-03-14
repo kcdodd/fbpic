@@ -320,6 +320,9 @@ class Simulation(object):
           Bt = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
           Bz = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ) )]
 
+        self.ext_rho = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda )
+        ndarray_fill.exec( self.ext_rho, 0.0 )
+
         self.ext_z, self.ext_r = np.meshgrid(
           np.linspace(zmin + 0.5 * dz, zmax - 0.5 * dz, Nz),
           np.linspace(0.5 * dr, rmax - 0.5 * dr, Nr),
@@ -804,8 +807,7 @@ class Simulation(object):
             # Deposit the charge of the virtual particles in the antenna
             for antenna in antennas_list:
                 antenna.deposit( fld, 'rho' )
-            # Sum contribution from each CPU threads (skipped on GPU)
-            fld.sum_reduce_deposition_array('rho')
+
             # Divide by cell volume
             fld.divide_by_volume('rho')
 
@@ -816,6 +818,7 @@ class Simulation(object):
                 r = self.ext_r,
                 z = self.ext_z,
                 t = t,
+                dt = self.dt,
                 Er = grid.Er,
                 Et = grid.Et,
                 Ez = grid.Ez,
@@ -823,7 +826,8 @@ class Simulation(object):
                 Br = grid.Br,
                 Bt = grid.Bt,
                 Bz = grid.Bz,
-                rho = grid.rho )
+                rho = grid.rho,
+                ext_rho = self.ext_rho )
 
             # Exchange guard cells if requested by the user
             if exchange and self.comm.size > 1:
@@ -851,8 +855,7 @@ class Simulation(object):
             # Deposit the current of the virtual particles in the antenna
             for antenna in antennas_list:
                 antenna.deposit( fld, 'J' )
-            # Sum contribution from each CPU threads (skipped on GPU)
-            fld.sum_reduce_deposition_array('J')
+
             # Divide by cell volume
             fld.divide_by_volume('J')
 

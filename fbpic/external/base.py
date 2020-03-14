@@ -74,10 +74,11 @@ class ExternalFrameCharge ( ArrayOp ):
   """
 
   def exec( self,
-    r, z, t,
+    r, z, t, dt,
     Er, Et, Ez, phi,
     Br, Bt, Bz,
-    rho ):
+    rho,
+    ext_rho ):
     """
 
     Parameters
@@ -87,6 +88,7 @@ class ExternalFrameCharge ( ArrayOp ):
     z : array
     t : float
       simulation time of the evaluation
+    dt : float
     Er : array
       cylindrical electric field at each position
     Et : array
@@ -99,13 +101,16 @@ class ExternalFrameCharge ( ArrayOp ):
     Bz : array
     rho : array
       charge density to add to at each position
+    ext_rho : rho
+      external charge density, may be used as working state (zero at begining of sim).
     """
 
     super().exec(
-      r = r, z = z, t = t,
+      r = r, z = z, t = t, dt = dt,
       Er = Er, Et = Et, Ez = Ez, phi = phi,
       Br = Br, Bt = Bt, Bz = Bz,
-      rho = rho )
+      rho = rho,
+      ext_rho = ext_rho )
 
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

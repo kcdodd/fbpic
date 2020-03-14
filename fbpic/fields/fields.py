@@ -194,21 +194,6 @@ class Fields(object) :
             {'J': False, 'rho_prev': False, 'rho_new': False,
                 'rho_next_xy': False, 'rho_next_z': False }
 
-        # Generate duplicated deposition arrays, when using threading
-        # (One copy per thread ; 2 guard cells on each side in z and r,
-        # in order to store contributions from, at most, cubic shape factors ;
-        # these deposition guard cells are folded into the regular box
-        # inside `sum_reduce_2d_array`)
-        if create_threading_buffers:
-            self.rho_global = np.zeros( dtype=np.complex128,
-                shape=(nthreads, self.Nm, self.Nz+4, self.Nr+4) )
-            self.Jr_global = np.zeros( dtype=np.complex128,
-                    shape=(nthreads, self.Nm, self.Nz+4, self.Nr+4) )
-            self.Jt_global = np.zeros( dtype=np.complex128,
-                    shape=(nthreads, self.Nm, self.Nz+4, self.Nr+4) )
-            self.Jz_global = np.zeros( dtype=np.complex128,
-                    shape=(nthreads, self.Nm, self.Nz+4, self.Nr+4) )
-
 
     def send_fields_to_gpu( self ):
         """
@@ -552,46 +537,6 @@ class Fields(object) :
         # Erase the fields in the interpolation grid
         for m in range(self.Nm):
             self.interp[m].erase(fieldtype)
-
-        # Erase the duplicated deposition buffer
-        if not self.use_cuda:
-            if fieldtype == 'rho':
-                numba_erase_threading_buffer( self.rho_global )
-            elif fieldtype == 'J':
-                numba_erase_threading_buffer( self.Jr_global )
-                numba_erase_threading_buffer( self.Jt_global )
-                numba_erase_threading_buffer( self.Jz_global )
-
-
-    def sum_reduce_deposition_array(self, fieldtype):
-        """
-        Sum the duplicated array for rho and J deposition on CPU
-        into a single array.
-
-        This function does nothing when running on GPU
-
-        Parameters
-        ----------
-        fieldtype : string
-            A string which represents the kind of field to be erased
-            (either 'J' or 'rho')
-        """
-        # Skip this function when running on GPU
-        if self.use_cuda:
-            return
-
-        # Sum thread-local results to main field array
-        if fieldtype == 'rho':
-            for m in range(self.Nm):
-                sum_reduce_2d_array( self.rho_global, self.interp[m].rho, m )
-        elif fieldtype == 'J':
-            for m in range(self.Nm):
-                sum_reduce_2d_array( self.Jr_global, self.interp[m].Jr, m )
-                sum_reduce_2d_array( self.Jt_global, self.interp[m].Jt, m )
-                sum_reduce_2d_array( self.Jz_global, self.interp[m].Jz, m )
-        else :
-            raise ValueError('Invalid string for fieldtype: %s'%fieldtype)
-
 
     def filter_spect( self, fieldtype ) :
         """
