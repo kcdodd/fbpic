@@ -313,14 +313,14 @@ class Simulation(object):
           invdr = self.fld.interp[0].invdr,
           rmin = 0.0,
           Nr = Nr,
-          Er = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
-          Et = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
-          Ez = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
-          Br = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
-          Bt = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ),
-          Bz = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda ) )]
+          Er = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),
+          Et = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),
+          Ez = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),
+          Br = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),
+          Bt = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),
+          Bz = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ) )]
 
-        self.ext_rho = empty_ndarray( (Nz, Nr), dtype = np.complex64, device = self.use_cuda )
+        self.ext_rho = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda )
         ndarray_fill.exec( self.ext_rho, 0.0 )
 
         self.ext_z, self.ext_r = np.meshgrid(

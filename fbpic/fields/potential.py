@@ -19,7 +19,7 @@ if cuda_installed:
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class SolvePotential ( ArrayOp ):
-  """Solves potential defined as div(grad(phi)) = div(E)
+  """Solves potential defined as div(grad(phi)) = div(E) ( Coulomb gauge ).
   """
 
   #-----------------------------------------------------------------------------
@@ -56,39 +56,26 @@ class SolvePotential ( ArrayOp ):
       if i < phi.shape[0]:
         divE = kr[i]*( Ep[i] - Em[i] ) + 1.j*kz[i]*Ez[i]
 
-        if inv_k2[i] == 0.0:
-          phi[i] = 0.0
-        else:
-          phi[i] = divE * inv_k2[i]
+        phi[i] = divE * inv_k2[i]
 
   #-----------------------------------------------------------------------------
   def init_cpu( self ):
 
     @self.attr
     @njit_parallel
-    def _cpu( phi, Ez, kz, np, nt, nf ):
+    def _cpu( phi, Ep, Em, Ez, inv_k2, kr, kz, nthreads, nt, ntot ):
 
-      for i in prange( np ):
-        offset = i*nt
+      for j in prange(nthreads):
+        offset = nt * j
 
-        for j in range(nt):
-          divE = kr[offset + j]*( Ep[offset + j] - Em[offset + j] ) + 1.j*kz[offset + j]*Ez[offset + j]
+        for k in range(nt):
+          i = offset + k
 
-          if inv_k2[offset + j] == 0.0:
-            phi[offset + j] = 0.0
-          else:
-            phi[offset + j] = divE * inv_k2[offset + j]
+          if i < ntot:
+            divE = kr[i]*( Ep[i] - Em[i] ) + 1.j*kz[i]*Ez[i]
 
+            phi[i] = divE * inv_k2[i]
 
-      offset = np * nt
-
-      for j in range(nf):
-        divE = kr[offset + j]*( Ep[offset + j] - Em[offset + j] ) + 1.j*kz[offset + j]*Ez[offset + j]
-
-        if inv_k2[offset + j] == 0.0:
-          phi[offset + j] = 0.0
-        else:
-          phi[offset + j] = divE * inv_k2[offset + j]
 
   #-----------------------------------------------------------------------------
   def exec_numba_cuda ( self,
@@ -139,8 +126,7 @@ class SolvePotential ( ArrayOp ):
       kr = kr.ravel()
       kz = kz.ravel()
 
-    nt = phi.shape[0] // nthreads
-    nf = phi.shape[0] % nthreads
+    nt = phi.shape[0] // nthreads + (1 if ( phi.shape[0] % nthreads != 0 ) else 0)
 
     self._cpu(
         phi,
@@ -152,6 +138,6 @@ class SolvePotential ( ArrayOp ):
         kz,
         nthreads,
         nt,
-        nf )
+        phi.shape[0] )
 
 solve_potential = SolvePotential()
