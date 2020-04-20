@@ -17,10 +17,7 @@ from .injection import BallisticBeforePlane, ContinuousInjector, \
 # Load the numba methods
 from .push.numba_methods import push_p_numba, push_p_ioniz_numba, \
                                 push_p_after_plane_numba, push_x_numba
-from .gathering.threading_methods import gather_field_numba_linear, \
-        gather_field_numba_cubic
-from .gathering.threading_methods_one_mode import erase_eb_numba, \
-    gather_field_numba_linear_one_mode, gather_field_numba_cubic_one_mode
+
 
 # use field methods for deposition routines
 from fbpic.fields.numba_methods import sum_reduce_2d_array
@@ -37,10 +34,7 @@ if cuda_installed:
   from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
   from .push.cuda_methods import push_p_gpu, push_p_ioniz_gpu, \
                               push_p_after_plane_gpu, push_x_gpu
-  from .gathering.cuda_methods import gather_field_gpu_linear, \
-      gather_field_gpu_cubic
-  from .gathering.cuda_methods_one_mode import erase_eb_cuda, \
-      gather_field_gpu_linear_one_mode, gather_field_gpu_cubic_one_mode
+
   from .utilities.cuda_sorting import write_sorting_buffer, \
       get_cell_idx_per_particle, sort_particles_per_cell, \
       prefill_prefix_sum, incl_prefix_sum
@@ -48,6 +42,9 @@ if cuda_installed:
 from .deposition import (
   deposit_moment_n,
   deposit_moment_nv )
+
+from .gathering import (
+  gather_vector )
 
 from fbpic.discrete import (
   ndarray_fill )
@@ -282,7 +279,7 @@ class Particles(object) :
             # Copy particle tracker data
             if self.tracker is not None:
                 self.tracker.send_to_gpu()
-            # Copy the ionization data
+            # Copy the ionizasuper().exec( )tion data
             if self.ionizer is not None:
                 self.ionizer.send_to_gpu()
 
@@ -504,6 +501,8 @@ class Particles(object) :
             self.compton_scatterer.handle_scattering( self, t )
 
 
+
+
     def rearrange_particle_arrays( self ):
         """
         Rearranges the particle data arrays to match with the sorted
@@ -704,134 +703,19 @@ class Particles(object) :
         # Restrict field gathering to physical domain
         rmax_gather = comm.get_rmax( with_damp=False )
 
-        # GPU (CUDA) version
-        if self.use_cuda:
-            # Get the threads per block and the blocks per grid
-            dim_grid_1d, dim_block_1d = \
-                cuda_tpb_bpg_1d( self.Ntot, TPB=self.gather_tpb )
-            # Call the CUDA Kernel for the gathering of E and B Fields
-            if self.particle_shape == 'linear':
-                if Nm == 2:
-                    # Optimized version for 2 modes
-                    gather_field_gpu_linear[dim_grid_1d, dim_block_1d](
-                         self.x, self.y, self.z,
-                         rmax_gather,
-                         grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                         grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                         grid[0].Er, grid[0].Et, grid[0].Ez,
-                         grid[1].Er, grid[1].Et, grid[1].Ez,
-                         grid[0].Br, grid[0].Bt, grid[0].Bz,
-                         grid[1].Br, grid[1].Bt, grid[1].Bz,
-                         self.Ex, self.Ey, self.Ez,
-                         self.Bx, self.By, self.Bz)
-                else:
-                    # Generic version for arbitrary number of modes
-                    for m in range(Nm):
-                        gather_field_gpu_linear_one_mode[
-                            dim_grid_1d, dim_block_1d](
-                            self.x, self.y, self.z,
-                            rmax_gather,
-                            grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                            grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                            grid[m].Er, grid[m].Et, grid[m].Ez,
-                            grid[m].Br, grid[m].Bt, grid[m].Bz, m,
-                            self.Ex, self.Ey, self.Ez,
-                            self.Bx, self.By, self.Bz)
-            elif self.particle_shape == 'cubic':
-                if Nm == 2:
-                    # Optimized version for 2 modes
-                    gather_field_gpu_cubic[dim_grid_1d, dim_block_1d](
-                         self.x, self.y, self.z,
-                         rmax_gather,
-                         grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                         grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                         grid[0].Er, grid[0].Et, grid[0].Ez,
-                         grid[1].Er, grid[1].Et, grid[1].Ez,
-                         grid[0].Br, grid[0].Bt, grid[0].Bz,
-                         grid[1].Br, grid[1].Bt, grid[1].Bz,
-                         self.Ex, self.Ey, self.Ez,
-                         self.Bx, self.By, self.Bz)
-                else:
-                    # Generic version for arbitrary number of modes
-                    for m in range(Nm):
-                        gather_field_gpu_cubic_one_mode[
-                            dim_grid_1d, dim_block_1d](
-                            self.x, self.y, self.z,
-                            rmax_gather,
-                            grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                            grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                            grid[m].Er, grid[m].Et, grid[m].Ez,
-                            grid[m].Br, grid[m].Bt, grid[m].Bz, m,
-                            self.Ex, self.Ey, self.Ez,
-                            self.Bx, self.By, self.Bz)
-            else:
-                raise ValueError("`particle_shape` should be either \
-                                  'linear' or 'cubic' \
-                                   but is `%s`" % self.particle_shape)
-        # CPU version
-        else:
-            if self.particle_shape == 'linear':
-                if Nm == 2:
-                    # Optimized version for 2 modes
-                    gather_field_numba_linear(
-                        self.x, self.y, self.z,
-                        rmax_gather,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        grid[0].Er, grid[0].Et, grid[0].Ez,
-                        grid[1].Er, grid[1].Et, grid[1].Ez,
-                        grid[0].Br, grid[0].Bt, grid[0].Bz,
-                        grid[1].Br, grid[1].Bt, grid[1].Bz,
-                        self.Ex, self.Ey, self.Ez,
-                        self.Bx, self.By, self.Bz)
-                else:
-                    # Generic version for arbitrary number of modes
-                    for m in range(Nm):
-                        gather_field_numba_linear_one_mode(
-                            self.x, self.y, self.z,
-                            rmax_gather,
-                            grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                            grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                            grid[m].Er, grid[m].Et, grid[m].Ez,
-                            grid[m].Br, grid[m].Bt, grid[m].Bz, m,
-                            self.Ex, self.Ey, self.Ez,
-                            self.Bx, self.By, self.Bz
-                        )
-            elif self.particle_shape == 'cubic':
-                # Divide particles into chunks (each chunk is handled by a
-                # different thread) and return the indices that bound chunks
-                ptcl_chunk_indices = get_chunk_indices(self.Ntot, nthreads)
-                if Nm == 2:
-                    # Optimized version for 2 modes
-                    gather_field_numba_cubic(
-                        self.x, self.y, self.z,
-                        rmax_gather,
-                        grid[0].invdz, grid[0].zmin, grid[0].Nz,
-                        grid[0].invdr, grid[0].rmin, grid[0].Nr,
-                        grid[0].Er, grid[0].Et, grid[0].Ez,
-                        grid[1].Er, grid[1].Et, grid[1].Ez,
-                        grid[0].Br, grid[0].Bt, grid[0].Bz,
-                        grid[1].Br, grid[1].Bt, grid[1].Bz,
-                        self.Ex, self.Ey, self.Ez,
-                        self.Bx, self.By, self.Bz,
-                        nthreads, ptcl_chunk_indices )
-                else:
-                    # Generic version for arbitrary number of modes
-                    for m in range(Nm):
-                        gather_field_numba_cubic_one_mode(
-                            self.x, self.y, self.z,
-                            rmax_gather,
-                            grid[m].invdz, grid[m].zmin, grid[m].Nz,
-                            grid[m].invdr, grid[m].rmin, grid[m].Nr,
-                            grid[m].Er, grid[m].Et, grid[m].Ez,
-                            grid[m].Br, grid[m].Bt, grid[m].Bz, m,
-                            self.Ex, self.Ey, self.Ez,
-                            self.Bx, self.By, self.Bz,
-                            nthreads, ptcl_chunk_indices )
-            else:
-                raise ValueError("`particle_shape` should be either \
-                                  'linear' or 'cubic' \
-                                   but is `%s`" % self.particle_shape)
+        gather_vector.exec(
+          vector = [ self.Ex, self.Ey, self.Ez ],
+          x = self.x, y = self.y, z = self.z,
+          grid = [ [ grid[m].Er, grid[m].Et, grid[m].Ez ] for m in range(len(grid)) ],
+          dz = dz, zmin = zmin, dr = dr, rmin = rmin, rmax = rmax_gather,
+          ptcl_shape = self.particle_shape )
+
+        gather_vector.exec(
+          vector = [ self.Bx, self.By, self.Bz ],
+          x = self.x, y = self.y, z = self.z,
+          grid = [ [ grid[m].Br, grid[m].Bt, grid[m].Bz ] for m in range(len(grid)) ],
+          dz = dz, zmin = zmin, dr = dr, rmin = rmin, rmax = rmax_gather,
+          ptcl_shape = self.particle_shape )
 
     #---------------------------------------------------------------------------
     def deposit( self,

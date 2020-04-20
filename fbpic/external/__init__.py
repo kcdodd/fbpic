@@ -2,4 +2,5 @@ from .base import (
   ExternalFrameField,
   ExternalSymmetricFrameField,
   ExternalFrameCharge,
-  ExternalFrameCurrent )
+  ExternalFrameCurrent,
+  ExternalFrameSurface )

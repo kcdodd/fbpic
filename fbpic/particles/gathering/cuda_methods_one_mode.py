@@ -17,26 +17,6 @@ add_linear_gather_for_mode = cuda.jit( add_linear_gather_for_mode,
 add_cubic_gather_for_mode = cuda.jit( add_cubic_gather_for_mode,
                                         device=True, inline=True )
 
-@cuda.jit
-def erase_eb_cuda( Ex, Ey, Ez, Bx, By, Bz, Ntot ):
-    """
-    Reset the arrays of fields (i.e. set them to 0)
-
-    Parameters
-    ----------
-    Ex, Ey, Ez, Bx, By, Bz: 1d arrays of floats
-        (One element per macroparticle)
-        Represents the fields on the macroparticles
-    """
-    i = cuda.grid(1)
-    if i < Ntot:
-        Ex[i] = 0
-        Ey[i] = 0
-        Ez[i] = 0
-        Bx[i] = 0
-        By[i] = 0
-        Bz[i] = 0
-
 # -----------------------
 # Field gathering linear
 # -----------------------
@@ -46,10 +26,8 @@ def gather_field_gpu_linear_one_mode(x, y, z,
                     rmax_gather,
                     invdz, zmin, Nz,
                     invdr, rmin, Nr,
-                    Er_m, Et_m, Ez_m,
-                    Br_m, Bt_m, Bz_m, m,
-                    Ex, Ey, Ez,
-                    Bx, By, Bz):
+                    Er_m, Et_m, Ez_m, m,
+                    Ex, Ey, Ez ):
     """
     Gathering of the fields (E and B) using numba on the GPU.
     Iterates over the particles, calculates the weighted amount
@@ -189,24 +167,6 @@ def gather_field_gpu_linear_one_mode(x, y, z,
             Ey[i] += sin*Fr + cos*Ft
             Ez[i] += Fz
 
-            # B-Field
-            # -------
-            # Clear the placeholders for the
-            # gathered field for each coordinate
-            Fr = 0.
-            Ft = 0.
-            Fz = 0.
-            # Add contribution from mode m
-            Fr, Ft, Fz = add_linear_gather_for_mode( m,
-                Fr, Ft, Fz, exptheta_m, Br_m, Bt_m, Bz_m,
-                iz_lower, iz_upper, ir_lower, ir_upper,
-                S_ll, S_lu, S_lg, S_ul, S_uu, S_ug )
-            # Convert to Cartesian coordinates
-            # and write to particle field arrays
-            Bx[i] += cos*Fr - sin*Ft
-            By[i] += sin*Fr + cos*Ft
-            Bz[i] += Fz
-
 # -----------------------
 # Field gathering cubic
 # -----------------------
@@ -216,10 +176,8 @@ def gather_field_gpu_cubic_one_mode(x, y, z,
                     rmax_gather,
                     invdz, zmin, Nz,
                     invdr, rmin, Nr,
-                    Er_m, Et_m, Ez_m,
-                    Br_m, Bt_m, Bz_m, m,
-                    Ex, Ey, Ez,
-                    Bx, By, Bz):
+                    Er_m, Et_m, Ez_m, m,
+                    Ex, Ey, Ez ):
     """
     Gathering of the fields (E and B) using numba on the GPU.
     Iterates over the particles, calculates the weighted amount
@@ -329,20 +287,3 @@ def gather_field_gpu_cubic_one_mode(x, y, z,
             Ex[i] += cos*Fr - sin*Ft
             Ey[i] += sin*Fr + cos*Ft
             Ez[i] += Fz
-
-            # B-Field
-            # -------
-            # Clear the placeholders for the
-            # gathered field for each coordinate
-            Fr = 0.
-            Ft = 0.
-            Fz = 0.
-            # Add contribution from mode m
-            Fr, Ft, Fz =  add_cubic_gather_for_mode( m,
-                Fr, Ft, Fz, exptheta_m, Br_m, Bt_m, Bz_m,
-                ir_lowest, iz_lowest, Sr, Sz, Nr, Nz )
-            # Convert to Cartesian coordinates
-            # and write to particle field arrays
-            Bx[i] += cos*Fr - sin*Ft
-            By[i] += sin*Fr + cos*Ft
-            Bz[i] += Fz

@@ -75,7 +75,7 @@ class DepositMomentNV ( ArrayOp ):
     """
     Parameters
     ----------
-    grid : array<complex>(nm, nz, nr)
+    grid : array<complex>(nm, 3, nz, nr)
       output grid of density * gamma * v / c
 
       interpolation grid for azimuthal modes 0, 1, ..., nm-1.
@@ -1575,7 +1575,7 @@ class DepositMomentNV ( ArrayOp ):
     gamma_minus_1,
     dz, zmin,
     dr, rmin,
-    ptcl_shape, ):
+    ptcl_shape ):
 
     assert ptcl_shape in ['linear', 'cubic']
 

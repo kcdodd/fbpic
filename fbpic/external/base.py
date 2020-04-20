@@ -153,3 +153,29 @@ class ExternalFrameCurrent ( ArrayOp ):
       Er = Er, Et = Et, Ez = Ez, phi = phi,
       Br = Br, Bt = Bt, Bz = Bz,
       Jr = Jr, Jt = Jt, Jz = Jz )
+
+#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class ExternalFrameSurface ( ArrayOp ):
+  """External axially symmetric surface specified in the solution reference frame
+  """
+
+  def exec( self,
+    r, z, t, dt,
+    surf ):
+    """
+
+    Parameters
+    ----------
+    r : array
+      cylindrical coordinates to evaluate source
+    z : array
+    t : float
+      simulation time of the evaluation
+    dt : float
+    surf : array
+      surface mask at each position
+    """
+
+    super().exec(
+      r = r, z = z, t = t, dt = dt,
+      surf = surf )

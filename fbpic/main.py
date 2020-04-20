@@ -40,7 +40,8 @@ from .external import (
   ExternalFrameField,
   ExternalSymmetricFrameField,
   ExternalFrameCharge,
-  ExternalFrameCurrent )
+  ExternalFrameCurrent,
+  ExternalFrameSurface )
 
 Grid = namedtuple("Grid", "invdz zmin Nz invdr rmin Nr Er Et Ez Br Bt Bz" )
 
@@ -466,6 +467,29 @@ class Simulation(object):
 
       self._ext_frame_currents = sources
 
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    @property
+    def ext_frame_surfs(self):
+      return self._ext_frame_surfs
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def set_ext_frame_surfs(self, surfaces ):
+      """External axially symmetric surfaces specified in the solution reference frame
+
+      Must be instances of ExternalFrameSurface
+
+      positions r,z are arrays of the same shape as the field arrays.
+      The current time t is a float,
+      The function should add the surface mask to the existing
+      array value (aka +=, or, max, etc),
+      """
+
+      if not all( isinstance( f, ExternalFrameSurface ) for f in surfaces ):
+        msg = f"all surfaces must be instance of ExternalFrameSurface: {[type(f) for f in sources]}"
+
+        raise ValueError(msg)
+
+      self._ext_frame_surfaces = surfaces
 
     #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     def step(self,
