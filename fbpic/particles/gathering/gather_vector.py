@@ -1,17 +1,24 @@
 
+from fbpic.discrete import (
+  ArrayOp )
 
-from .gathering.threading_methods import gather_field_numba_linear, \
-        gather_field_numba_cubic
-from .gathering.threading_methods_one_mode import erase_eb_numba, \
-    gather_field_numba_linear_one_mode, gather_field_numba_cubic_one_mode
+from .threading_methods import (
+  gather_field_numba_linear,
+  gather_field_numba_cubic )
+
+from .threading_methods_one_mode import (
+    gather_field_numba_linear_one_mode,
+    gather_field_numba_cubic_one_mode )
 
 from fbpic.utils.cuda import cuda_installed
 if cuda_installed:
-  from .gathering.cuda_methods import (
+  from fbpic.utils.cuda import cuda, cuda_tpb_bpg_1d, cuda_gpu_model
+
+  from .cuda_methods import (
     gather_field_gpu_linear,
     gather_field_gpu_cubic )
 
-  from .gathering.cuda_methods_one_mode import (
+  from .cuda_methods_one_mode import (
     gather_field_gpu_linear_one_mode,
     gather_field_gpu_cubic_one_mode )
 
@@ -32,10 +39,8 @@ class GatherVector ( ArrayOp ):
     """
     Parameters
     ----------
-    vx : array
-      particle vector x value ( gathered from interpolation grid )
-    vy : array
-    vz : array
+    vector : array(3, nptcl)
+      gathered vector value
     x : array
       particle positionsvx, vy, vz,
     y : array
@@ -90,7 +95,7 @@ class GatherVector ( ArrayOp ):
           1./dr, rmin, grid[0][0].shape[1],
           grid[0][0], grid[0][1], grid[0][2],
           grid[1][0], grid[1][1], grid[1][2],
-          vector[0], vector[1], vectpr[2] )
+          vector[0], vector[1], vector[2] )
       else:
         # Generic version for arbitrary number of modes
         for m in range(len(grid)):
@@ -100,7 +105,7 @@ class GatherVector ( ArrayOp ):
             1./dz, zmin, grid[0][0].shape[0],
             1./dr, rmin, grid[0][0].shape[1],
             grid[m][0], grid[m][1], grid[m][2], m,
-            vector[0], vector[1], vectpr[2] )
+            vector[0], vector[1], vector[2] )
 
     elif ptcl_shape == 'cubic':
 
@@ -113,7 +118,7 @@ class GatherVector ( ArrayOp ):
           1./dr, rmin, grid[0][0].shape[1],
           grid[0][0], grid[0][1], grid[0][2],
           grid[1][0], grid[1][1], grid[1][2],
-          vector[0], vector[1], vectpr[2],
+          vector[0], vector[1], vector[2],
           nthreads, ptcl_chunk_indices )
       else:
         # Generic version for arbitrary number of modes
@@ -124,7 +129,7 @@ class GatherVector ( ArrayOp ):
             1./dz, zmin, grid[0][0].shape[0],
             1./dr, rmin, grid[0][0].shape[1],
             grid[m][0], grid[m][1], grid[m][2], m,
-            vector[0], vector[1], vectpr[2],
+            vector[0], vector[1], vector[2],
             nthreads, ptcl_chunk_indices )
 
 
@@ -142,12 +147,12 @@ class GatherVector ( ArrayOp ):
     # Define optimal number of CUDA threads per block for deposition
     # and gathering kernels (determined empirically)
     if ptcl_shape == "cubic":
-      deposit_tpb = 32
+      gather_tpb = 256
     else:
-      deposit_tpb = 16 if cuda_gpu_model == "V100" else 8
+      gather_tpb = 128
 
-    dim_grid_2d_flat, dim_block_2d_flat = \
-        cuda_tpb_bpg_1d( x.shape[0], TPB=deposit_tpb )
+    dim_grid_1d, dim_block_1d = \
+        cuda_tpb_bpg_1d( x.shape[0], TPB=gather_tpb )
 
     # Deposit J in each of four directions
     if ptcl_shape == 'linear':
@@ -161,7 +166,7 @@ class GatherVector ( ArrayOp ):
             1./dr, rmin, grid[0][0].shape[1],
             grid[0][0], grid[0][1], grid[0][2],
             grid[1][0], grid[1][1], grid[1][2],
-            vector[0], vector[1], vectpr[2] )
+            vector[0], vector[1], vector[2] )
       else:
         # Generic version for arbitrary number of modes
         for m in range(Nm):
@@ -172,7 +177,7 @@ class GatherVector ( ArrayOp ):
               1./dz, zmin, grid[0][0].shape[0],
               1./dr, rmin, grid[0][0].shape[1],
               grid[m][0], grid[m][1], grid[m][2], m,
-              vector[0], vector[1], vectpr[2] )
+              vector[0], vector[1], vector[2] )
 
     elif ptcl_shape == 'cubic':
       if len(grid) == 2:
@@ -185,7 +190,7 @@ class GatherVector ( ArrayOp ):
             1./dr, rmin, grid[0][0].shape[1],
             grid[0][0], grid[0][1], grid[0][2],
             grid[1][0], grid[1][1], grid[1][2],
-            vector[0], vector[1], vectpr[2] )
+            vector[0], vector[1], vector[2] )
     else:
       # Generic version for arbitrary number of modes
       for m in range(len(grid)):
@@ -196,7 +201,7 @@ class GatherVector ( ArrayOp ):
             1./dz, zmin, grid[0][0].shape[0],
             1./dr, rmin, grid[0][0].shape[1],
             grid[m][0], grid[m][1], grid[m][2], m,
-            vector[0], vector[1], vectpr[2] )
+            vector[0], vector[1], vector[2] )
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 gather_vector = GatherVector()

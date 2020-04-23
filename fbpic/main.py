@@ -43,7 +43,8 @@ from .external import (
   ExternalFrameCurrent,
   ExternalFrameSurface )
 
-Grid = namedtuple("Grid", "invdz zmin Nz invdr rmin Nr Er Et Ez Br Bt Bz" )
+# lightweight named tuple to emulate interpolation grid values
+Grid = namedtuple("Grid", "invdz dz zmin Nz invdr dr rmin Nr Er Et Ez Br Bt Bz" )
 
 class Simulation(object):
     """
@@ -309,9 +310,11 @@ class Simulation(object):
         self._ext_symmetric_frame_fields = []
         self.ext_field_grids = [Grid(
           invdz = self.fld.interp[0].invdz,
+          dz = self.fld.interp[0].dz,
           zmin = zmin,
           Nz = Nz,
           invdr = self.fld.interp[0].invdr,
+          dr = self.fld.interp[0].dr,
           rmin = 0.0,
           Nr = Nr,
           Er = empty_ndarray( (Nz, Nr), dtype = np.complex64, gpu = self.use_cuda ),

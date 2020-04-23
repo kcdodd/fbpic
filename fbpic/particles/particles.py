@@ -707,14 +707,16 @@ class Particles(object) :
           vector = [ self.Ex, self.Ey, self.Ez ],
           x = self.x, y = self.y, z = self.z,
           grid = [ [ grid[m].Er, grid[m].Et, grid[m].Ez ] for m in range(len(grid)) ],
-          dz = dz, zmin = zmin, dr = dr, rmin = rmin, rmax = rmax_gather,
+          dz = grid[0].dz, zmin = grid[0].zmin,
+          dr = grid[0].dr, rmin = grid[0].rmin, rmax = rmax_gather,
           ptcl_shape = self.particle_shape )
 
         gather_vector.exec(
           vector = [ self.Bx, self.By, self.Bz ],
           x = self.x, y = self.y, z = self.z,
           grid = [ [ grid[m].Br, grid[m].Bt, grid[m].Bz ] for m in range(len(grid)) ],
-          dz = dz, zmin = zmin, dr = dr, rmin = rmin, rmax = rmax_gather,
+          dz = grid[0].dz, zmin = grid[0].zmin,
+          dr = grid[0].dr, rmin = grid[0].rmin, rmax = rmax_gather,
           ptcl_shape = self.particle_shape )
 
     #---------------------------------------------------------------------------
